@@ -7,6 +7,9 @@ later via environment flags.
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 import os
 import random
@@ -15,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -26,6 +30,17 @@ KNOT_API_KEY = os.getenv("KNOT_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+FINANCE_BOT_MODEL = os.getenv("FINANCE_BOT_MODEL", "gpt-4o-mini")
+FINANCE_BOT_URL = os.getenv("FINANCE_BOT_API_URL", "https://api.openai.com/v1/chat/completions")
+FINANCE_BOT_HISTORY_LIMIT = int(os.getenv("FINANCE_BOT_HISTORY_LIMIT", "8"))
+FINANCE_BOT_PROMPT = os.getenv(
+    "FINANCE_BOT_SYSTEM_PROMPT",
+    "You are Finance Bot, a cheerful AI that ONLY answers questions about personal finance, "
+    "lending, credit, savings, budgeting, or financial literacy. "
+    'If a user asks anything outside finance, reply: "I’m Finance Bot and only trained for money matters, sorry!" '
+    "Use friendly, encouraging language and keep answers under 150 words.",
+)
 BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
 COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
 DEFAULT_COMMUNITY_LAT = float(os.getenv("DEFAULT_COMMUNITY_LAT", "40.3573"))
@@ -134,6 +149,20 @@ class FeedPostRequest(BaseModel):
     user_id: str
     text: str
     share_opt_in: bool
+
+
+class FinanceBotMessage(BaseModel):
+    sender: str = Field(pattern="^(user|bot)$")
+    text: str
+
+
+class FinanceBotRequest(BaseModel):
+    prompt: str
+    history: List[FinanceBotMessage] = Field(default_factory=list)
+
+
+class FinanceBotResponse(BaseModel):
+    reply: str
 
 
 def _community_from_geo(geo: Geo) -> str:
@@ -590,6 +619,65 @@ def lender_dashboard(user_id: str):
         "next_payment": {"amount": round(capital * 0.01, 2), "due_in_weeks": 1},
         "expected_revenue_year": round(capital * 0.12, 2),
     }
+
+
+@app.post("/finance-bot", response_model=FinanceBotResponse)
+async def finance_bot(payload: FinanceBotRequest):
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="Finance Bot is offline right now.")
+    prompt = payload.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="Prompt is required.")
+
+    trimmed_history = payload.history[-FINANCE_BOT_HISTORY_LIMIT :]
+    chat_messages: List[Dict[str, str]] = [{"role": "system", "content": FINANCE_BOT_PROMPT}]
+    for entry in trimmed_history:
+        text = entry.text.strip()
+        if not text:
+            continue
+        role = "assistant" if entry.sender == "bot" else "user"
+        chat_messages.append({"role": role, "content": text})
+    chat_messages.append({"role": "user", "content": prompt})
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                FINANCE_BOT_URL,
+                headers={
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": FINANCE_BOT_MODEL,
+                    "temperature": 0.3,
+                    "messages": chat_messages,
+                },
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Finance Bot request failed.") from exc
+
+    if response.status_code >= 400:
+        try:
+            error_detail = response.json().get("error", {}).get("message")
+        except Exception:  # pragma: no cover - defensive
+            error_detail = None
+        raise HTTPException(status_code=response.status_code, detail=error_detail or "Finance Bot error.")
+
+    try:
+        payload_json = response.json()
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=502, detail="Finance Bot returned invalid data.") from exc
+
+    reply = (
+        payload_json.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+        .strip()
+    )
+    if not reply:
+        reply = "Finance Bot is unsure how to help with that right now."
+    return {"reply": reply}
+
 def _format_lender_id(user_id: str) -> str:
     suffix = user_id.split("_", 1)[-1]
     return f"Lender-{suffix[:4].upper()}"

@@ -83,3 +83,9 @@ export async function fetchLenderDashboard(userId) {
   const { data } = await api.get('/dashboard/lender', { params: { user_id: userId } });
   return data;
 }
+
+export async function askFinanceBot(payload) {
+  // POST /finance-bot -> {reply:string}
+  const { data } = await api.post('/finance-bot', payload);
+  return data;
+}
