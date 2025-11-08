@@ -5,14 +5,14 @@
 @layer base {
   :root {
     --background: 47 61% 98%;
-    --foreground: 168 24% 15%;
+    --foreground: 0 0% 0%;
     --muted: 47 40% 92%;
     --muted-foreground: 168 14% 30%;
     --accent: 50 98% 65%;
     --accent-foreground: 168 24% 15%;
     --border: 47 45% 80%;
     --input: 47 45% 80%;
-    --primary: 152 49% 35%;
+    --primary: 181 100% 23.5%;
     --primary-foreground: 47 61% 98%;
     --secondary: 26 95% 70%;
     --secondary-foreground: 168 24% 15%;
@@ -34,7 +34,7 @@
     @apply min-h-screen bg-background text-foreground antialiased;
     background-image: radial-gradient(circle at 0 0, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
       radial-gradient(circle at 80px 80px, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-      linear-gradient(135deg, rgba(215, 245, 236, 0.9), rgba(255, 247, 204, 0.8), rgba(255, 229, 241, 0.8));
+      linear-gradient(135deg, #effbfa, #ffffff);
     background-size: 120px 120px, 120px 120px, 100% 100%;
   }
 
