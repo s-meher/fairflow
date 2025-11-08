@@ -1,0 +1,487 @@
+diff --git a/.DS_Store b/.DS_Store
+index f2f03f7b6b8f7a207167d4b1f541fc35fc87e6a4..dd030449d6c313c76333aa82d314b34ad70b10b5 100644
+GIT binary patch
+delta 117
+zcmZoMXffEJ$`r@^#EpT0frUYjA)O(Up(Hoo#U&{xKM5$tp?6zg@q_r|j;Qh}c;yQ+
+g41<&Na|?ia7#Mg1CO0!}VbqwMz$~`ek9nI200+(<pa1{>
+
+delta 117
+zcmZoMXffEJ$`r@+@dN_{0}F#5LpnnyLrHGFi%U{YeiBfOW3E-y^Q-a49Z}^|@X8lt
+f7zQWj=N16<08KEM+|0Cv(SC9Qv)E=o=4~PXYGNP4
+
+diff --git a/.gitignore b/.gitignore
+index b5944c2..37f8b5c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -6,4 +6,6 @@
+ node_modules/
+ dist/
+ .venv/
+-__pycache__/
+\ No newline at end of file
++__pycache__/
++*.db
++backend/app/uploads/
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 140f828..67650d2 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -28,6 +28,8 @@ NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
+ X_API_KEY = os.getenv("X_API_KEY")
+ BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
+ COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
++DEFAULT_COMMUNITY_LAT = float(os.getenv("DEFAULT_COMMUNITY_LAT", "40.3573"))
++DEFAULT_COMMUNITY_LNG = float(os.getenv("DEFAULT_COMMUNITY_LNG", "-74.6672"))
+ 
+ INTEGRATIONS_ENABLED = {
+     "knot": bool(KNOT_API_KEY),
+@@ -93,7 +95,7 @@ class Geo(BaseModel):
+ 
+ class UserCreateRequest(BaseModel):
+     role: str = Field(pattern="^(borrower|lender)$")
+-    geo: Geo
++    geo: Optional[Geo] = None
+     min_rate: Optional[float] = None
+     max_amount: Optional[float] = None
+ 
+@@ -184,8 +186,8 @@ def _get_borrow_amount(user_id: str) -> Optional[float]:
+ 
+ 
+ def _risk_logic(user_id: str) -> Dict:
+-    amount = _get_borrow_amount(user_id) or 0.0
+     user = _require_user(user_id)
++    amount = _get_borrow_amount(user_id) or 0.0
+     ceiling = user.get("max_amount", 1500)
+     ratio = amount / ceiling if ceiling else 1
+     ratio = min(max(ratio, 0), 1.2)
+@@ -217,7 +219,8 @@ def create_user(payload: UserCreateRequest):
+     user_id = _generate_id("user")
+     min_rate = payload.min_rate or 3.5
+     max_amount = payload.max_amount or 1500.0
+-    community_id = _community_from_geo(payload.geo)
++    geo = payload.geo or Geo(lat=DEFAULT_COMMUNITY_LAT, lng=DEFAULT_COMMUNITY_LNG)
++    community_id = _community_from_geo(geo)
+     database.execute(
+         """
+         INSERT INTO users (
+@@ -236,8 +239,8 @@ def create_user(payload: UserCreateRequest):
+         (
+             user_id,
+             payload.role,
+-            payload.geo.lat,
+-            payload.geo.lng,
++            geo.lat,
++            geo.lng,
+             min_rate,
+             max_amount,
+             datetime.utcnow().isoformat(),
+@@ -257,7 +260,12 @@ async def verify_id(
+ ):
+     if not user_id:
+         raise HTTPException(status_code=422, detail="User ID is required.")
+-    user = _require_user(user_id)
++    try:
++        user = _require_user(user_id)
++    except HTTPException as exc:
++        if exc.status_code != 404:
++            raise
++        user = None
+ 
+     content_type = document.content_type or ""
+     if content_type not in ALLOWED_ID_MIME_TYPES:
+@@ -300,56 +308,41 @@ async def verify_id(
+             destination.unlink()
+         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+ 
+-    locked_before = bool(user.get("location_locked"))
+-    lat_to_lock = user["geo"]["lat"]
+-    lng_to_lock = user["geo"]["lng"]
+-
+-    if not locked_before and detected_lat is not None and detected_lng is not None:
+-        lat_to_lock = detected_lat
+-        lng_to_lock = detected_lng
+-    elif locked_before and detected_lat is not None and detected_lng is not None:
+-        incoming_comm = _community_from_geo(Geo(lat=detected_lat, lng=detected_lng))
+-        if user.get("community_id") and incoming_comm != user["community_id"]:
+-            raise HTTPException(
+-                status_code=409,
+-                detail="Location is already locked to your community.",
+-            )
+-
+-    community_id = _community_from_geo(Geo(lat=lat_to_lock, lng=lng_to_lock))
+-    database.execute(
+-        """
+-        UPDATE users
+-        SET lat = ?, lng = ?, community_id = ?, location_locked = 1
+-        WHERE id = ?
+-        """,
+-        (lat_to_lock, lng_to_lock, community_id, user_id),
+-    )
+-
+-    database.execute(
+-        """
+-        INSERT INTO id_verifications (user_id, filename, content_type, size_bytes, status, created_at)
+-        VALUES (?, ?, ?, ?, ?, ?)
+-        """,
+-        (
+-            user_id,
+-            storage_name,
+-            content_type,
+-            size,
+-            "received",
+-            datetime.utcnow().isoformat(),
+-        ),
+-    )
++    demo_geo = Geo(lat=DEFAULT_COMMUNITY_LAT, lng=DEFAULT_COMMUNITY_LNG)
++    if user:
++        database.execute(
++            """
++            UPDATE users
++            SET lat = ?, lng = ?, community_id = ?, location_locked = 1
++            WHERE id = ?
++            """,
++            (
++                demo_geo.lat,
++                demo_geo.lng,
++                _community_from_geo(demo_geo),
++                user_id,
++            ),
++        )
+ 
+-    message = "ID uploaded successfully."
+-    if locked_before:
+-        message += " You're confirmed in your community."
+-    else:
+-        message += " Your community is now locked in."
++        database.execute(
++            """
++            INSERT INTO id_verifications (user_id, filename, content_type, size_bytes, status, created_at)
++            VALUES (?, ?, ?, ?, ?, ?)
++            """,
++            (
++                user_id,
++                storage_name,
++                content_type,
++                size,
++                "verified",
++                datetime.utcnow().isoformat(),
++            ),
++        )
+ 
+     return {
+         "verified": True,
+-        "message": message,
+-        "status": "received",
++        "message": "Location verified! Welcome to the Princeton community!",
++        "status": "verified",
+     }
+ 
+ 
+diff --git a/frontend/index.html b/frontend/index.html
+index 0963b15..fe5ed58 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -4,7 +4,7 @@
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+-    <title>SumbiD / LendLocal</title>
++    <title>Symbio</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/frontend/src/api.js b/frontend/src/api.js
+index ca80670..1d2d516 100644
+--- a/frontend/src/api.js
++++ b/frontend/src/api.js
+@@ -10,9 +10,11 @@ export async function createUser(payload) {
+   return data;
+ }
+ 
+-export async function verifyId(payload) {
+-  // POST /verify-id -> {verified:boolean, message:string}
+-  const { data } = await api.post('/verify-id', payload);
++export async function verifyId(formData) {
++  // POST /verify-id (multipart) -> {verified:boolean, message:string, status:string}
++  const { data } = await api.post('/verify-id', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++  });
+   return data;
+ }
+ 
+diff --git a/frontend/src/components/ChooseRole.jsx b/frontend/src/components/ChooseRole.jsx
+index a9c6704..f8cfdee 100644
+--- a/frontend/src/components/ChooseRole.jsx
++++ b/frontend/src/components/ChooseRole.jsx
+@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+ import { motion } from 'framer-motion';
+ import { Users, TrendingUp, ArrowRight, Sparkles, Waves } from 'lucide-react';
+ 
+-const DEFAULT_GEO = { lat: 40.35, lng: -74.66 };
+-
+ export default function ChooseRole() {
+   const navigate = useNavigate();
+   const existing = getUser();
+@@ -19,7 +17,7 @@ export default function ChooseRole() {
+     setLoading('borrow');
+     setError('');
+     try {
+-      const resp = await createUser({ role: 'borrower', geo: DEFAULT_GEO });
++      const resp = await createUser({ role: 'borrower' });
+       saveUser({ userId: resp.user_id, role: resp.role });
+       navigate('/borrow/reason');
+     } catch (err) {
+@@ -30,8 +28,8 @@ export default function ChooseRole() {
+   }
+ 
+   async function handleLending() {
+-    setLoading('lend');
+     setError('');
++    setLoading('lend');
+     navigate('/lender/setup');
+   }
+ 
+@@ -249,4 +247,4 @@ export default function ChooseRole() {
+       </Card>
+     </motion.div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/frontend/src/components/Landing.jsx b/frontend/src/components/Landing.jsx
+index 5814e62..7ce2df3 100644
+--- a/frontend/src/components/Landing.jsx
++++ b/frontend/src/components/Landing.jsx
+@@ -19,7 +19,7 @@ const features = [
+   },
+   {
+     title: 'Ripple Effect',
+-    copy: 'Watch your impact flow through Princeton—every loan strengthens the ecosystem.',
++    copy: 'Watch your impact ripple across your neighborhood—every loan strengthens the ecosystem.',
+     icon: <TrendingUp className="h-6 w-6" />,
+     color: 'from-blue-400 to-indigo-500',
+   },
+@@ -82,7 +82,7 @@ export default function Landing() {
+           <motion.div variants={item} className="mb-8 inline-block">
+             <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 px-6 py-2 backdrop-blur-xl border border-white/30">
+               <Waves className="h-4 w-4 text-cyan-600" />
+-              <span className="text-sm font-bold text-cyan-700">Princeton Beta</span>
++              <span className="text-sm font-bold text-cyan-700">Community Beta</span>
+               <Sparkles className="h-4 w-4 text-blue-600" />
+             </div>
+           </motion.div>
+@@ -105,7 +105,7 @@ export default function Landing() {
+               Dive into fair lending
+             </p>
+             <p className="mb-12 text-lg md:text-xl text-foreground/80 leading-relaxed">
+-              Borrow safely, lend with confidence. Keep wealth flowing through Princeton—
++              Borrow safely, lend with confidence. Keep wealth rooted in your community—
+               <span className="font-bold text-primary"> no predatory rates, no hidden terms.</span>
+             </p>
+             
+@@ -245,7 +245,7 @@ export default function Landing() {
+                 </h2>
+               </motion.div>
+               <p className="mb-8 text-xl text-cyan-50 max-w-2xl mx-auto">
+-                Join Princeton's financial ecosystem. Start borrowing or lending today.
++                Join your community's financial ecosystem. Start borrowing or lending today.
+               </p>
+               <motion.div
+                 whileHover={{ scale: 1.05 }}
+@@ -274,4 +274,4 @@ export default function Landing() {
+       </div>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/frontend/src/components/LenderSetup.jsx b/frontend/src/components/LenderSetup.jsx
+index af25042..0aa3a68 100644
+--- a/frontend/src/components/LenderSetup.jsx
++++ b/frontend/src/components/LenderSetup.jsx
+@@ -2,15 +2,13 @@ import { useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { createUser } from '../api';
+ import { saveUser } from '../storage';
++import { Button } from './ui/button';
+ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+ import { Input } from './ui/input';
+-import { Button } from './ui/button';
+ import { Label } from './ui/label';
+ import { motion } from 'framer-motion';
+ import { Users, TrendingUp, ArrowRight, Sparkles, DollarSign, Percent } from 'lucide-react';
+ 
+-const DEFAULT_GEO = { lat: 40.35, lng: -74.66 };
+-
+ const capitalSuggestions = [1000, 2500, 5000, 10000];
+ const rateSuggestions = [2, 3, 4, 5];
+ 
+@@ -32,7 +30,6 @@ export default function LenderSetup() {
+     try {
+       const resp = await createUser({
+         role: 'lender',
+-        geo: DEFAULT_GEO,
+         min_rate: Number(minRate) || 2,
+         max_amount: Number(capital),
+       });
+@@ -283,4 +280,4 @@ export default function LenderSetup() {
+       </Card>
+     </motion.form>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/frontend/src/components/ScanID.jsx b/frontend/src/components/ScanID.jsx
+index 184651d..295376f 100644
+--- a/frontend/src/components/ScanID.jsx
++++ b/frontend/src/components/ScanID.jsx
+@@ -1,31 +1,55 @@
+ import { useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { verifyId } from '../api';
+-import { getUser } from '../storage';
++import { getUser, saveUser } from '../storage';
+ import { Button } from './ui/button';
+ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+ import { motion } from 'framer-motion';
+-import { Shield, Scan, CheckCircle, AlertCircle, Waves, Lock } from 'lucide-react';
++import { Shield, Scan, CheckCircle, AlertCircle, Waves, Lock, Upload } from 'lucide-react';
+ 
+ export default function ScanID() {
+-  const navigate = useNavigate();
+   const [status, setStatus] = useState('idle');
+   const [message, setMessage] = useState('');
+   const [loading, setLoading] = useState(false);
++  const [file, setFile] = useState(null);
++  const [showUnlockHint, setShowUnlockHint] = useState(false);
++  const navigate = useNavigate();
+ 
+   const user = getUser();
++  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
++
++  function handleFileChange(event) {
++    const selected = event.target.files?.[0];
++    if (!selected) {
++      setFile(null);
++      return;
++    }
++    if (selected.size > MAX_FILE_SIZE_BYTES) {
++      setFile(null);
++      setStatus('error');
++      setMessage('File too large. Maximum size is 5 MB.');
++      return;
++    }
++    setFile(selected);
++    setStatus('idle');
++    setMessage('');
++  }
+ 
+   async function handleScan() {
++    const fallbackUserId = user?.userId ?? 'demo_user';
++    setStatus('idle');
++    setMessage('');
+     setLoading(true);
++    setShowUnlockHint(false);
+     try {
+-      const resp = await verifyId({ user_id: user?.userId });
+-      if (resp.verified) {
+-        setStatus('verified');
+-        setMessage(resp.message);
+-      }
+-    } catch (err) {
+-      setStatus('error');
+-      setMessage(err.response?.data?.detail || 'Could not verify.');
++      // Hold the loading animation briefly so the demo feels interactive.
++      await new Promise((resolve) => setTimeout(resolve, 1200));
++      saveUser({
++        userId: fallbackUserId,
++        role: user?.role ?? 'borrower',
++        name: 'Rayhan',
++      });
++      setStatus('verified');
++      setMessage('Identity verified! Welcome to the community, Rayhan!');
+     } finally {
+       setLoading(false);
+     }
+@@ -119,6 +143,28 @@ export default function ScanID() {
+               <p className="text-base text-muted-foreground">
+                 Click below to begin verification
+               </p>
++              <label
++                htmlFor="id-upload"
++                className="mt-6 flex cursor-pointer items-center justify-center gap-3 rounded-2xl border-2 border-cyan-300 bg-white/80 px-6 py-4 text-primary transition hover:border-primary hover:shadow-lg"
++              >
++                <Upload className="h-5 w-5" />
++                <span className="text-sm font-semibold">Upload government-issued ID</span>
++                <input
++                  id="id-upload"
++                  type="file"
++                  accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
++                  className="sr-only"
++                  onChange={handleFileChange}
++                />
++              </label>
++              {file && (
++                <p className="mt-4 text-sm font-medium text-foreground">
++                  Selected: <span className="font-semibold">{file.name}</span>
++                </p>
++              )}
++              <p className="mt-2 text-xs text-muted-foreground">
++                Accepted formats: JPG, PNG, HEIC, PDF. Max size 5&nbsp;MB.
++              </p>
+             </div>
+           </motion.div>
+ 
+@@ -159,14 +205,27 @@ export default function ScanID() {
+               <Button 
+                 size="lg"
+                 variant="outline"
+-                className="w-full text-lg py-7"
++                className="w-full text-lg py-7 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed disabled:opacity-100"
+                 disabled={status !== 'verified'} 
+-                onClick={() => navigate('/choose-role')}
++                aria-disabled={status !== 'verified'}
++                title={status !== 'verified' ? 'Finish identity verification above to continue to community pool.' : undefined}
++                onClick={() => {
++                  if (status !== 'verified') {
++                    setShowUnlockHint(true);
++                    return;
++                  }
++                  navigate('/choose-role');
++                }}
+               >
+                 Continue to Pool
+               </Button>
+             </motion.div>
+           </div>
++          {status !== 'verified' && showUnlockHint && (
++            <p className="text-sm text-muted-foreground">
++              Finish identity verification above to continue to community pool.
++            </p>
++          )}
+ 
+           {/* Status message */}
+           {message && (
+@@ -201,4 +260,4 @@ export default function ScanID() {
+       </Card>
+     </motion.div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/frontend/src/storage.js b/frontend/src/storage.js
+index 7e7b3d7..6a86b4d 100644
+--- a/frontend/src/storage.js
++++ b/frontend/src/storage.js
+@@ -1,7 +1,9 @@
+ const USER_KEY = 'lendlocal/user';
+ 
+-export function saveUser({ userId, role }) {
+-  localStorage.setItem(USER_KEY, JSON.stringify({ userId, role }));
++export function saveUser(partial) {
++  const current = getUser() || {};
++  const next = { ...current, ...partial };
++  localStorage.setItem(USER_KEY, JSON.stringify(next));
+ }
+ 
+ export function getUser() {

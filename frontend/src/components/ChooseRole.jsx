@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { motion } from 'framer-motion';
 import { Users, TrendingUp, ArrowRight, Sparkles, Waves } from 'lucide-react';
 
-const DEFAULT_GEO = { lat: 40.35, lng: -74.66 };
-
 export default function ChooseRole() {
   const navigate = useNavigate();
   const existing = getUser();
@@ -16,11 +14,21 @@ export default function ChooseRole() {
   const [error, setError] = useState('');
 
   async function handleBorrowing() {
-    setLoading('borrow');
     setError('');
+    if (existing?.userId && (existing.role === 'borrower' || existing.isBorrower)) {
+      saveUser({ role: 'borrower', isBorrower: true });
+      navigate('/borrow/reason');
+      return;
+    }
+    setLoading('borrow');
     try {
-      const resp = await createUser({ role: 'borrower', geo: DEFAULT_GEO });
-      saveUser({ userId: resp.user_id, role: resp.role });
+      const resp = await createUser({ role: 'borrower' });
+      saveUser({
+        userId: resp.user_id,
+        role: resp.role,
+        isBorrower: Boolean(resp.is_borrower),
+        isVerified: Boolean(resp.is_verified),
+      });
       navigate('/borrow/reason');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not start borrow flow.');
@@ -30,8 +38,8 @@ export default function ChooseRole() {
   }
 
   async function handleLending() {
-    setLoading('lend');
     setError('');
+    setLoading('lend');
     navigate('/lender/setup');
   }
 

@@ -1,31 +1,85 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { verifyId } from '../api';
-import { getUser } from '../storage';
+import { createUser, verifyId } from '../api';
+import { getUser, saveUser } from '../storage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { motion } from 'framer-motion';
-import { Shield, Scan, CheckCircle, AlertCircle, Waves, Lock } from 'lucide-react';
+import { Shield, Scan, CheckCircle, AlertCircle, Waves, Lock, Upload } from 'lucide-react';
 
 export default function ScanID() {
-  const navigate = useNavigate();
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [file, setFile] = useState(null);
+  const [showUnlockHint, setShowUnlockHint] = useState(false);
+  const navigate = useNavigate();
 
   const user = getUser();
+  const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+
+  function handleFileChange(event) {
+    const selected = event.target.files?.[0];
+    if (!selected) {
+      setFile(null);
+      return;
+    }
+    if (selected.size > MAX_FILE_SIZE_BYTES) {
+      setFile(null);
+      setStatus('error');
+      setMessage('File too large. Maximum size is 5 MB.');
+      return;
+    }
+    setFile(selected);
+    setStatus('idle');
+    setMessage('');
+  }
 
   async function handleScan() {
+    if (!file) {
+      setStatus('error');
+      setMessage('Upload a photo ID to continue.');
+      setShowUnlockHint(true);
+      return;
+    }
+    setStatus('idle');
+    setMessage('');
     setLoading(true);
+    setShowUnlockHint(false);
     try {
-      const resp = await verifyId({ user_id: user?.userId });
-      if (resp.verified) {
-        setStatus('verified');
-        setMessage(resp.message);
+      const existingUser = getUser();
+      let userId = existingUser?.userId;
+      let role = existingUser?.role;
+      let isBorrower = existingUser?.isBorrower;
+
+      if (!userId) {
+        const created = await createUser({ role: 'borrower' });
+        userId = created.user_id;
+        role = created.role;
+        isBorrower = Boolean(created.is_borrower);
       }
+
+      const formData = new FormData();
+      formData.append('user_id', userId);
+      formData.append('document', file);
+
+      // Hold the loading animation briefly so the demo feels interactive.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const resp = await verifyId(formData);
+
+      saveUser({
+        userId,
+        role: role || 'borrower',
+        isBorrower: isBorrower ?? role === 'borrower',
+        isVerified: Boolean(resp.verified),
+        name: 'Rayhan',
+      });
+      setStatus('verified');
+      setMessage(resp.message || 'Identity verified! Welcome to the community, Rayhan!');
     } catch (err) {
       setStatus('error');
-      setMessage(err.response?.data?.detail || 'Could not verify.');
+      const detail = err.response?.data?.detail || 'Could not verify your ID. Try again.';
+      setMessage(detail);
     } finally {
       setLoading(false);
     }
@@ -119,6 +173,28 @@ export default function ScanID() {
               <p className="text-base text-muted-foreground">
                 Click below to begin verification
               </p>
+              <label
+                htmlFor="id-upload"
+                className="mt-6 flex cursor-pointer items-center justify-center gap-3 rounded-2xl border-2 border-cyan-300 bg-white/80 px-6 py-4 text-primary transition hover:border-primary hover:shadow-lg"
+              >
+                <Upload className="h-5 w-5" />
+                <span className="text-sm font-semibold">Upload government-issued ID</span>
+                <input
+                  id="id-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+                  className="sr-only"
+                  onChange={handleFileChange}
+                />
+              </label>
+              {file && (
+                <p className="mt-4 text-sm font-medium text-foreground">
+                  Selected: <span className="font-semibold">{file.name}</span>
+                </p>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Accepted formats: JPG, PNG, HEIC, PDF. Max size 5&nbsp;MB.
+              </p>
             </div>
           </motion.div>
 
@@ -159,14 +235,27 @@ export default function ScanID() {
               <Button 
                 size="lg"
                 variant="outline"
-                className="w-full text-lg py-7"
+                className="w-full text-lg py-7 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed disabled:opacity-100"
                 disabled={status !== 'verified'} 
-                onClick={() => navigate('/choose-role')}
+                aria-disabled={status !== 'verified'}
+                title={status !== 'verified' ? 'Finish identity verification above to continue to community pool.' : undefined}
+                onClick={() => {
+                  if (status !== 'verified') {
+                    setShowUnlockHint(true);
+                    return;
+                  }
+                  navigate('/choose-role');
+                }}
               >
                 Continue to Pool
               </Button>
             </motion.div>
           </div>
+          {status !== 'verified' && showUnlockHint && (
+            <p className="text-sm text-muted-foreground">
+              Finish identity verification above to continue to community pool.
+            </p>
+          )}
 
           {/* Status message */}
           {message && (

@@ -19,7 +19,7 @@ const features = [
   },
   {
     title: 'Ripple Effect',
-    copy: 'Watch your impact flow through Princeton—every loan strengthens the ecosystem.',
+    copy: 'Watch your impact ripple across your neighborhood—every loan strengthens the ecosystem.',
     icon: <TrendingUp className="h-6 w-6" />,
     color: 'from-blue-400 to-indigo-500',
   },
@@ -82,7 +82,7 @@ export default function Landing() {
           <motion.div variants={item} className="mb-8 inline-block">
             <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 px-6 py-2 backdrop-blur-xl border border-white/30">
               <Waves className="h-4 w-4 text-cyan-600" />
-              <span className="text-sm font-bold text-cyan-700">Princeton Beta</span>
+              <span className="text-sm font-bold text-cyan-700">Community Beta</span>
               <Sparkles className="h-4 w-4 text-blue-600" />
             </div>
           </motion.div>
@@ -105,7 +105,7 @@ export default function Landing() {
               Dive into fair lending
             </p>
             <p className="mb-12 text-lg md:text-xl text-foreground/80 leading-relaxed">
-              Borrow safely, lend with confidence. Keep wealth flowing through Princeton—
+              Borrow safely, lend with confidence. Keep wealth rooted in your community—
               <span className="font-bold text-primary"> no predatory rates, no hidden terms.</span>
             </p>
             
@@ -245,7 +245,7 @@ export default function Landing() {
                 </h2>
               </motion.div>
               <p className="mb-8 text-xl text-cyan-50 max-w-2xl mx-auto">
-                Join Princeton's financial ecosystem. Start borrowing or lending today.
+                Join your community's financial ecosystem. Start borrowing or lending today.
               </p>
               <motion.div
                 whileHover={{ scale: 1.05 }}

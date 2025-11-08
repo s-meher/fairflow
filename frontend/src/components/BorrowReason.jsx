@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { postBorrowReason } from '../api';
+import { createUser, postBorrowReason } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
 import { setSessionValue } from '../session';
+import { saveUser } from '../storage';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
@@ -31,6 +32,10 @@ export default function BorrowReason() {
       setError('Please share your story with the community.');
       return;
     }
+    if (!user?.userId) {
+      setError('Could not find your profile. Please restart the flow.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -38,7 +43,27 @@ export default function BorrowReason() {
       setSessionValue('borrow_reason', reason);
       navigate('/borrow/amount');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not save reason.');
+      const detail = err.response?.data?.detail;
+      const status = err.response?.status;
+      if (status === 400 && detail === 'Only borrowers can set reasons.') {
+        try {
+          const created = await createUser({ role: 'borrower' });
+          saveUser({
+            userId: created.user_id,
+            role: created.role,
+            isBorrower: Boolean(created.is_borrower),
+            isVerified: Boolean(created.is_verified),
+          });
+          await postBorrowReason({ user_id: created.user_id, reason });
+          setSessionValue('borrow_reason', reason);
+          navigate('/borrow/amount');
+          return;
+        } catch (fallbackErr) {
+          setError(fallbackErr.response?.data?.detail || 'Could not save reason.');
+        }
+      } else {
+        setError(detail || 'Could not save reason.');
+      }
     } finally {
       setLoading(false);
     }

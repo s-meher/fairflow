@@ -10,9 +10,11 @@ export async function createUser(payload) {
   return data;
 }
 
-export async function verifyId(payload) {
-  // POST /verify-id -> {verified:boolean, message:string}
-  const { data } = await api.post('/verify-id', payload);
+export async function verifyId(formData) {
+  // POST /verify-id (multipart) -> {verified:boolean, message:string, status:string}
+  const { data } = await api.post('/verify-id', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return data;
 }
 

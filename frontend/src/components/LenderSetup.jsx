@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createUser } from '../api';
 import { saveUser } from '../storage';
+import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
-import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { motion } from 'framer-motion';
 import { Users, TrendingUp, ArrowRight, Sparkles, DollarSign, Percent } from 'lucide-react';
-
-const DEFAULT_GEO = { lat: 40.35, lng: -74.66 };
 
 const capitalSuggestions = [1000, 2500, 5000, 10000];
 const rateSuggestions = [2, 3, 4, 5];
@@ -32,11 +30,15 @@ export default function LenderSetup() {
     try {
       const resp = await createUser({
         role: 'lender',
-        geo: DEFAULT_GEO,
         min_rate: Number(minRate) || 2,
         max_amount: Number(capital),
       });
-      saveUser({ userId: resp.user_id, role: resp.role });
+      saveUser({
+        userId: resp.user_id,
+        role: resp.role,
+        isBorrower: Boolean(resp.is_borrower),
+        isVerified: Boolean(resp.is_verified),
+      });
       navigate('/dashboard/lender');
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not save lender profile.');

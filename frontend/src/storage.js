@@ -1,7 +1,9 @@
 const USER_KEY = 'lendlocal/user';
 
-export function saveUser({ userId, role }) {
-  localStorage.setItem(USER_KEY, JSON.stringify({ userId, role }));
+export function saveUser(partial) {
+  const current = getUser() || {};
+  const next = { ...current, ...partial };
+  localStorage.setItem(USER_KEY, JSON.stringify(next));
 }
 
 export function getUser() {

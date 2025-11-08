@@ -28,6 +28,8 @@ NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
 BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
 COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
+DEFAULT_COMMUNITY_LAT = float(os.getenv("DEFAULT_COMMUNITY_LAT", "40.3573"))
+DEFAULT_COMMUNITY_LNG = float(os.getenv("DEFAULT_COMMUNITY_LNG", "-74.6672"))
 
 INTEGRATIONS_ENABLED = {
     "knot": bool(KNOT_API_KEY),
@@ -93,7 +95,7 @@ class Geo(BaseModel):
 
 class UserCreateRequest(BaseModel):
     role: str = Field(pattern="^(borrower|lender)$")
-    geo: Geo
+    geo: Optional[Geo] = None
     min_rate: Optional[float] = None
     max_amount: Optional[float] = None
 
@@ -148,6 +150,8 @@ def _require_user(user_id: str) -> Dict:
         SELECT
             id,
             role,
+            is_borrower,
+            is_verified,
             lat,
             lng,
             min_rate,
@@ -166,6 +170,8 @@ def _require_user(user_id: str) -> Dict:
     return {
         "id": row["id"],
         "role": row["role"],
+        "is_borrower": bool(row["is_borrower"]),
+        "is_verified": bool(row["is_verified"]),
         "geo": {"lat": row["lat"], "lng": row["lng"]},
         "min_rate": row["min_rate"],
         "max_amount": row["max_amount"],
@@ -184,8 +190,8 @@ def _get_borrow_amount(user_id: str) -> Optional[float]:
 
 
 def _risk_logic(user_id: str) -> Dict:
-    amount = _get_borrow_amount(user_id) or 0.0
     user = _require_user(user_id)
+    amount = _get_borrow_amount(user_id) or 0.0
     ceiling = user.get("max_amount", 1500)
     ratio = amount / ceiling if ceiling else 1
     ratio = min(max(ratio, 0), 1.2)
@@ -217,12 +223,15 @@ def create_user(payload: UserCreateRequest):
     user_id = _generate_id("user")
     min_rate = payload.min_rate or 3.5
     max_amount = payload.max_amount or 1500.0
-    community_id = _community_from_geo(payload.geo)
+    geo = payload.geo or Geo(lat=DEFAULT_COMMUNITY_LAT, lng=DEFAULT_COMMUNITY_LNG)
+    community_id = _community_from_geo(geo)
     database.execute(
         """
         INSERT INTO users (
             id,
             role,
+            is_borrower,
+            is_verified,
             lat,
             lng,
             min_rate,
@@ -231,13 +240,15 @@ def create_user(payload: UserCreateRequest):
             community_id,
             location_locked
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
             payload.role,
-            payload.geo.lat,
-            payload.geo.lng,
+            int(payload.role == "borrower"),
+            0,
+            geo.lat,
+            geo.lng,
             min_rate,
             max_amount,
             datetime.utcnow().isoformat(),
@@ -245,7 +256,12 @@ def create_user(payload: UserCreateRequest):
             0,
         ),
     )
-    return {"user_id": user_id, "role": payload.role}
+    return {
+        "user_id": user_id,
+        "role": payload.role,
+        "is_borrower": payload.role == "borrower",
+        "is_verified": False,
+    }
 
 
 @app.post("/verify-id")
@@ -257,7 +273,12 @@ async def verify_id(
 ):
     if not user_id:
         raise HTTPException(status_code=422, detail="User ID is required.")
-    user = _require_user(user_id)
+    try:
+        user = _require_user(user_id)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        user = None
 
     content_type = document.content_type or ""
     if content_type not in ALLOWED_ID_MIME_TYPES:
@@ -300,56 +321,41 @@ async def verify_id(
             destination.unlink()
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
 
-    locked_before = bool(user.get("location_locked"))
-    lat_to_lock = user["geo"]["lat"]
-    lng_to_lock = user["geo"]["lng"]
+    demo_geo = Geo(lat=DEFAULT_COMMUNITY_LAT, lng=DEFAULT_COMMUNITY_LNG)
+    if user:
+        database.execute(
+            """
+            UPDATE users
+            SET lat = ?, lng = ?, community_id = ?, location_locked = 1, is_verified = 1
+            WHERE id = ?
+            """,
+            (
+                demo_geo.lat,
+                demo_geo.lng,
+                _community_from_geo(demo_geo),
+                user_id,
+            ),
+        )
 
-    if not locked_before and detected_lat is not None and detected_lng is not None:
-        lat_to_lock = detected_lat
-        lng_to_lock = detected_lng
-    elif locked_before and detected_lat is not None and detected_lng is not None:
-        incoming_comm = _community_from_geo(Geo(lat=detected_lat, lng=detected_lng))
-        if user.get("community_id") and incoming_comm != user["community_id"]:
-            raise HTTPException(
-                status_code=409,
-                detail="Location is already locked to your community.",
-            )
-
-    community_id = _community_from_geo(Geo(lat=lat_to_lock, lng=lng_to_lock))
-    database.execute(
-        """
-        UPDATE users
-        SET lat = ?, lng = ?, community_id = ?, location_locked = 1
-        WHERE id = ?
-        """,
-        (lat_to_lock, lng_to_lock, community_id, user_id),
-    )
-
-    database.execute(
-        """
-        INSERT INTO id_verifications (user_id, filename, content_type, size_bytes, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            user_id,
-            storage_name,
-            content_type,
-            size,
-            "received",
-            datetime.utcnow().isoformat(),
-        ),
-    )
-
-    message = "ID uploaded successfully."
-    if locked_before:
-        message += " You're confirmed in your community."
-    else:
-        message += " Your community is now locked in."
+        database.execute(
+            """
+            INSERT INTO id_verifications (user_id, filename, content_type, size_bytes, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                storage_name,
+                content_type,
+                size,
+                "verified",
+                datetime.utcnow().isoformat(),
+            ),
+        )
 
     return {
         "verified": True,
-        "message": message,
-        "status": "received",
+        "message": "Location verified! Welcome to the Princeton community!",
+        "status": "verified",
     }
 
 
@@ -455,17 +461,19 @@ def borrow_decline(payload: BorrowDeclineRequest):
 @app.post("/loans/request")
 def create_loan_request(payload: LoanRequest):
     borrower = _require_user(payload.user_id)
-    if not borrower["location_locked"]:
-        raise HTTPException(
-            status_code=409,
-            detail="Verify your ID to lock your community before requesting a loan.",
-        )
     amount = _get_borrow_amount(payload.user_id)
     if not amount:
         raise HTTPException(status_code=404, detail="Borrow amount missing.")
     risk = _risk_logic(payload.user_id)
-    community_filter = borrower["community_id"]
-    lenders = _fetch_lenders(community_filter, require_lock=True)
+    if borrower["location_locked"]:
+        community_filter = borrower["community_id"]
+        require_lock = True
+    else:
+        # Demo fallback: auto-place borrowers into the default community without ID upload.
+        demo_geo = Geo(lat=DEFAULT_COMMUNITY_LAT, lng=DEFAULT_COMMUNITY_LNG)
+        community_filter = borrower["community_id"] or _community_from_geo(demo_geo)
+        require_lock = False
+    lenders = _fetch_lenders(community_filter, require_lock=require_lock)
     if not lenders:
         raise HTTPException(
             status_code=404,
