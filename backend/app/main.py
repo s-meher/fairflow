@@ -1,22 +1,25 @@
 """
-FastAPI application for LendLocal AI demo.
+FastAPI application for LendLocal AI demo backed by SQLite storage.
 
-All data lives in-memory and resets when the server restarts.
-External integrations (Knot, xAI, Nessie, X) are mocked and can be enabled
+External integrations (Knot, xAI, Nessie, X) remain mocked and can be enabled
 later via environment flags.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+from . import database
 
 # Load optional env keys for future integrations.
 KNOT_API_KEY = os.getenv("KNOT_API_KEY")
@@ -24,6 +27,7 @@ GROK_API_KEY = os.getenv("GROK_API_KEY")
 NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
 BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
+COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
 
 INTEGRATIONS_ENABLED = {
     "knot": bool(KNOT_API_KEY),
@@ -31,6 +35,34 @@ INTEGRATIONS_ENABLED = {
     "nessie": bool(NESSIE_API_KEY),
     "x": bool(X_API_KEY),
 }
+
+database.init_db()
+
+ID_UPLOAD_DIR = Path(
+    os.getenv(
+        "ID_UPLOAD_DIR",
+        Path(__file__).resolve().parent / "uploads" / "id_documents",
+    )
+)
+ID_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_ID_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/heic",
+    "image/heif",
+    "application/pdf",
+}
+ALLOWED_ID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".heic", ".heif"}
+MIME_EXTENSION_MAP = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "application/pdf": ".pdf",
+}
+MAX_ID_UPLOAD_BYTES = int(os.getenv("ID_UPLOAD_MAX_BYTES", 5 * 1024 * 1024))
+ID_UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 app = FastAPI(title="LendLocal AI API")
 app.add_middleware(
@@ -46,12 +78,11 @@ def _generate_id(prefix: str) -> str:
     return f"{prefix}_{''.join(random.choices(string.ascii_lowercase + string.digits, k=8))}"
 
 
-# ---- In-memory stores ----
-users: Dict[str, Dict] = {}
-borrow_reasons: Dict[str, str] = {}
-borrow_amounts: Dict[str, float] = {}
-matches: Dict[str, Dict] = {}
-posts: List[Dict] = []
+def _safe_document_extension(filename: Optional[str], content_type: str) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in ALLOWED_ID_EXTENSIONS:
+        return suffix
+    return MIME_EXTENSION_MAP.get(content_type, ".jpg")
 
 
 # ---- Models ----
@@ -103,86 +134,57 @@ class FeedPostRequest(BaseModel):
     share_opt_in: bool
 
 
-PRINCETON_BOUNDS = {
-    "lat_min": 40.330,
-    "lat_max": 40.380,
-    "lng_min": -74.700,
-    "lng_max": -74.620,
-}
-
-
-def _validate_princeton(geo: Geo) -> bool:
-    return (
-        PRINCETON_BOUNDS["lat_min"] <= geo.lat <= PRINCETON_BOUNDS["lat_max"]
-        and PRINCETON_BOUNDS["lng_min"] <= geo.lng <= PRINCETON_BOUNDS["lng_max"]
-    )
+def _community_from_geo(geo: Geo) -> str:
+    """Derive a coarse-grained community identifier from coordinates."""
+    precision = COMMUNITY_PRECISION_DEGREES or 0.05
+    lat_bucket = round(geo.lat / precision) * precision
+    lng_bucket = round(geo.lng / precision) * precision
+    return f"{lat_bucket:.4f}:{lng_bucket:.4f}"
 
 
 def _require_user(user_id: str) -> Dict:
-    user = users.get(user_id)
-    if not user:
+    row = database.fetchone(
+        """
+        SELECT
+            id,
+            role,
+            lat,
+            lng,
+            min_rate,
+            max_amount,
+            created_at,
+            community_id,
+            location_locked
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    )
+    if not row:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
-
-
-# --- Auth/Session ---
-# Request: {"role":"borrower|lender","geo":{"lat":float,"lng":float},"min_rate?":float,"max_amount?":float}
-# Response: {"user_id":string,"role":"borrower|lender"}
-@app.post("/users/create")
-def create_user(payload: UserCreateRequest):
-    if not _validate_princeton(payload.geo):
-        raise HTTPException(status_code=422, detail="Service is limited to Princeton area users.")
-
-    user_id = _generate_id("user")
-    users[user_id] = {
-        "role": payload.role,
-        "geo": payload.geo.model_dump(),
-        "min_rate": payload.min_rate or 3.5,
-        "max_amount": payload.max_amount or 1500.0,
-        "created_at": datetime.utcnow().isoformat(),
+    location_locked = bool(row["location_locked"])
+    return {
+        "id": row["id"],
+        "role": row["role"],
+        "geo": {"lat": row["lat"], "lng": row["lng"]},
+        "min_rate": row["min_rate"],
+        "max_amount": row["max_amount"],
+        "created_at": row["created_at"],
+        "community_id": row["community_id"],
+        "location_locked": location_locked,
     }
-    return {"user_id": user_id, "role": payload.role}
 
 
-# Request: {"user_id":string}
-# Response: {"verified":true,"message":"ID verified"}
-@app.post("/verify-id")
-def verify_id(payload: VerifyIdRequest):
-    if payload.user_id and payload.user_id not in users:
-        raise HTTPException(status_code=404, detail="Unknown user")
-    # Stub: Always succeeds regardless of external integrations.
-    return {"verified": True, "message": "ID verified"}
-
-
-# --- Borrow flow ---
-# Request: {"user_id":string,"reason":string}
-# Response: {"ok":true}
-@app.post("/borrow/reason")
-def save_borrow_reason(payload: BorrowReasonRequest):
-    user = _require_user(payload.user_id)
-    if user["role"] != "borrower":
-        raise HTTPException(status_code=400, detail="Only borrowers can set reasons.")
-    if not payload.reason.strip():
-        raise HTTPException(status_code=422, detail="Reason is required.")
-    borrow_reasons[payload.user_id] = payload.reason.strip()
-    return {"ok": True}
-
-
-# Request: {"user_id":string,"amount":number}
-# Response: {"ok":true}
-@app.post("/borrow/amount")
-def save_borrow_amount(payload: BorrowAmountRequest):
-    user = _require_user(payload.user_id)
-    if user["role"] != "borrower":
-        raise HTTPException(status_code=400, detail="Only borrowers can set amounts.")
-    if payload.amount <= 0:
-        raise HTTPException(status_code=422, detail="Amount must be positive.")
-    borrow_amounts[payload.user_id] = payload.amount
-    return {"ok": True}
+def _get_borrow_amount(user_id: str) -> Optional[float]:
+    row = database.fetchone(
+        "SELECT amount FROM borrow_amounts WHERE user_id = ?",
+        (user_id,),
+    )
+    return row["amount"] if row else None
 
 
 def _risk_logic(user_id: str) -> Dict:
-    amount = borrow_amounts.get(user_id, 0)
+    amount = _get_borrow_amount(user_id) or 0.0
     user = _require_user(user_id)
     ceiling = user.get("max_amount", 1500)
     ratio = amount / ceiling if ceiling else 1
@@ -209,93 +211,308 @@ def _risk_logic(user_id: str) -> Dict:
     }
 
 
-# Response: {"score":0-100,"label":"low|med|high","explanation":string,"recommendation":"yes|maybe|no"}
+# --- Auth/Session ---
+@app.post("/users/create")
+def create_user(payload: UserCreateRequest):
+    user_id = _generate_id("user")
+    min_rate = payload.min_rate or 3.5
+    max_amount = payload.max_amount or 1500.0
+    community_id = _community_from_geo(payload.geo)
+    database.execute(
+        """
+        INSERT INTO users (
+            id,
+            role,
+            lat,
+            lng,
+            min_rate,
+            max_amount,
+            created_at,
+            community_id,
+            location_locked
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            payload.role,
+            payload.geo.lat,
+            payload.geo.lng,
+            min_rate,
+            max_amount,
+            datetime.utcnow().isoformat(),
+            community_id,
+            0,
+        ),
+    )
+    return {"user_id": user_id, "role": payload.role}
+
+
+@app.post("/verify-id")
+async def verify_id(
+    user_id: str = Form(...),
+    document: UploadFile = File(...),
+    detected_lat: Optional[float] = Form(None),
+    detected_lng: Optional[float] = Form(None),
+):
+    if not user_id:
+        raise HTTPException(status_code=422, detail="User ID is required.")
+    user = _require_user(user_id)
+
+    content_type = document.content_type or ""
+    if content_type not in ALLOWED_ID_MIME_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported file type. Upload a JPG, PNG, HEIC, or PDF.",
+        )
+
+    extension = _safe_document_extension(document.filename, content_type)
+    storage_name = f"{user_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{extension}"
+    destination = ID_UPLOAD_DIR / storage_name
+
+    size = 0
+    try:
+        with destination.open("wb") as buffer:
+            while True:
+                chunk = await document.read(ID_UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_ID_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="File too large. Maximum size is 5 MB.",
+                    )
+                buffer.write(chunk)
+    except HTTPException:
+        if destination.exists():
+            destination.unlink()
+        raise
+    except Exception as exc:
+        if destination.exists():
+            destination.unlink()
+        raise HTTPException(status_code=500, detail="Could not save document.") from exc
+    finally:
+        await document.close()
+
+    if size == 0:
+        if destination.exists():
+            destination.unlink()
+        raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+
+    locked_before = bool(user.get("location_locked"))
+    lat_to_lock = user["geo"]["lat"]
+    lng_to_lock = user["geo"]["lng"]
+
+    if not locked_before and detected_lat is not None and detected_lng is not None:
+        lat_to_lock = detected_lat
+        lng_to_lock = detected_lng
+    elif locked_before and detected_lat is not None and detected_lng is not None:
+        incoming_comm = _community_from_geo(Geo(lat=detected_lat, lng=detected_lng))
+        if user.get("community_id") and incoming_comm != user["community_id"]:
+            raise HTTPException(
+                status_code=409,
+                detail="Location is already locked to your community.",
+            )
+
+    community_id = _community_from_geo(Geo(lat=lat_to_lock, lng=lng_to_lock))
+    database.execute(
+        """
+        UPDATE users
+        SET lat = ?, lng = ?, community_id = ?, location_locked = 1
+        WHERE id = ?
+        """,
+        (lat_to_lock, lng_to_lock, community_id, user_id),
+    )
+
+    database.execute(
+        """
+        INSERT INTO id_verifications (user_id, filename, content_type, size_bytes, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            storage_name,
+            content_type,
+            size,
+            "received",
+            datetime.utcnow().isoformat(),
+        ),
+    )
+
+    message = "ID uploaded successfully."
+    if locked_before:
+        message += " You're confirmed in your community."
+    else:
+        message += " Your community is now locked in."
+
+    return {
+        "verified": True,
+        "message": message,
+        "status": "received",
+    }
+
+
+# --- Borrow flow ---
+@app.post("/borrow/reason")
+def save_borrow_reason(payload: BorrowReasonRequest):
+    user = _require_user(payload.user_id)
+    if user["role"] != "borrower":
+        raise HTTPException(status_code=400, detail="Only borrowers can set reasons.")
+    if not payload.reason.strip():
+        raise HTTPException(status_code=422, detail="Reason is required.")
+    database.execute(
+        """
+        INSERT INTO borrow_reasons (user_id, reason)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET reason = excluded.reason
+        """,
+        (payload.user_id, payload.reason.strip()),
+    )
+    return {"ok": True}
+
+
+@app.post("/borrow/amount")
+def save_borrow_amount(payload: BorrowAmountRequest):
+    user = _require_user(payload.user_id)
+    if user["role"] != "borrower":
+        raise HTTPException(status_code=400, detail="Only borrowers can set amounts.")
+    if payload.amount <= 0:
+        raise HTTPException(status_code=422, detail="Amount must be positive.")
+    database.execute(
+        """
+        INSERT INTO borrow_amounts (user_id, amount)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET amount = excluded.amount
+        """,
+        (payload.user_id, payload.amount),
+    )
+    return {"ok": True}
+
+
 @app.get("/borrow/risk")
 def get_borrow_risk(user_id: str):
     _require_user(user_id)
-    if user_id not in borrow_amounts:
+    amount = _get_borrow_amount(user_id)
+    if amount is None:
         raise HTTPException(status_code=404, detail="Borrow amount not set.")
     return _risk_logic(user_id)
 
 
-# Request: {"user_id":string}
-# Response: {"combos":[{"id":"c1","total":number,"parts":[{"lenderId":"l1","amount":number,"rate":number}]}]}
 @app.post("/borrow/options")
 def get_borrow_options(payload: BorrowOptionsRequest):
-    _require_user(payload.user_id)
-    amount = borrow_amounts.get(payload.user_id)
+    borrower = _require_user(payload.user_id)
+    amount = _get_borrow_amount(payload.user_id)
     if not amount:
         raise HTTPException(status_code=404, detail="Borrow amount missing.")
 
-    combos = []
-    splits = [
-        [1.0],
-        [0.6, 0.4],
-        [0.5, 0.3, 0.2],
-    ]
-    for idx, split in enumerate(splits, start=1):
-        parts = []
-        for lender_idx, pct in enumerate(split, start=1):
-            parts.append(
-                {
-                    "lenderId": f"l{idx}{lender_idx}",
-                    "amount": round(amount * pct, 2),
-                    "rate": round(1.5 + lender_idx * 0.75, 2),
-                }
+    community_filter = borrower["community_id"] if borrower["location_locked"] else None
+    lenders = _fetch_lenders(
+        community_filter,
+        require_lock=borrower["location_locked"],
+    )
+    if not lenders:
+        if borrower["location_locked"] and community_filter:
+            raise HTTPException(
+                status_code=404,
+                detail="No lenders available in your community yet.",
             )
-        combos.append({"id": f"c{idx}", "total": round(amount, 2), "parts": parts})
+        raise HTTPException(status_code=404, detail="No community lenders available yet.")
+
+    total_pool = sum(l["capital"] for l in lenders)
+    if total_pool < amount:
+        raise HTTPException(
+            status_code=422,
+            detail="Community pool does not have enough capital to fulfill this request.",
+        )
+
+    combos = _generate_lender_combos(amount, lenders)
+    if not combos:
+        raise HTTPException(
+            status_code=422,
+            detail="Unable to assemble a lender pool for this amount right now.",
+        )
+
+    # Drop internal tracking before returning.
+    for combo in combos:
+        combo.pop("source_user_ids", None)
     return {"combos": combos}
 
 
-# Request: {"user_id":string}
-# Response: {"feedback":string}
 @app.post("/borrow/decline")
 def borrow_decline(payload: BorrowDeclineRequest):
-    user = _require_user(payload.user_id)
+    _require_user(payload.user_id)
     risk = _risk_logic(payload.user_id)
+    amount = _get_borrow_amount(payload.user_id) or 0.0
     feedback = (
         f"Risk score {risk['score']} suggests waiting. "
-        f"Reduce your request by ${borrow_amounts.get(payload.user_id, 0) * 0.2:.0f} or add savings."
+        f"Reduce your request by ${amount * 0.2:.0f} or add savings."
     )
     return {"feedback": feedback}
 
 
 # --- Match + transfers ---
-# Request: {"user_id":string}
-# Response: {"match_id":string,"total_amount":number,"lenders":[{"id":string,"amount":number,"rate":number}],"risk_score":number,"ai_advice":string}
 @app.post("/loans/request")
 def create_loan_request(payload: LoanRequest):
-    _require_user(payload.user_id)
-    amount = borrow_amounts.get(payload.user_id)
+    borrower = _require_user(payload.user_id)
+    if not borrower["location_locked"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Verify your ID to lock your community before requesting a loan.",
+        )
+    amount = _get_borrow_amount(payload.user_id)
     if not amount:
         raise HTTPException(status_code=404, detail="Borrow amount missing.")
     risk = _risk_logic(payload.user_id)
-    lenders = [
-        {"id": f"lender_{idx}", "amount": round(amount / 2 if idx == 1 else amount / 2, 2), "rate": 2.5 + idx}
-        for idx in range(1, 3)
+    community_filter = borrower["community_id"]
+    lenders = _fetch_lenders(community_filter, require_lock=True)
+    if not lenders:
+        raise HTTPException(
+            status_code=404,
+            detail="No lenders available in your community yet.",
+        )
+
+    allocations = _allocate_from_lenders(amount, lenders)
+    if not allocations:
+        raise HTTPException(
+            status_code=422,
+            detail="Community pool does not have enough capital to fulfill this request.",
+        )
+
+    lender_parts = [
+        {k: v for k, v in allocation.items() if k != "user_id"}
+        for allocation in allocations
     ]
     match_id = _generate_id("match")
+    database.execute(
+        """
+        INSERT INTO matches (id, user_id, total_amount, lenders_json, risk_score)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            match_id,
+            payload.user_id,
+            amount,
+            json.dumps(lender_parts),
+            risk["score"],
+        ),
+    )
     advice = "Great fit—community lenders ready." if risk["recommendation"] == "yes" else "Matched with cautious lenders."
-    matches[match_id] = {
-        "user_id": payload.user_id,
-        "total_amount": amount,
-        "lenders": lenders,
-        "risk_score": risk["score"],
-    }
     return {
         "match_id": match_id,
         "total_amount": amount,
-        "lenders": lenders,
+        "lenders": lender_parts,
         "risk_score": risk["score"],
         "ai_advice": advice,
     }
 
 
-# Request: {"match_id":string}
-# Response: {"txn_id":string,"message":"Funds transferred (mock)"}
 @app.post("/nessie/transfer")
 def mock_transfer(payload: NessieTransferRequest):
-    match = matches.get(payload.match_id)
+    match = database.fetchone(
+        "SELECT id FROM matches WHERE id = ?",
+        (payload.match_id,),
+    )
     if not match:
         raise HTTPException(status_code=404, detail="Match not found.")
     txn_id = _generate_id("txn")
@@ -303,38 +520,52 @@ def mock_transfer(payload: NessieTransferRequest):
 
 
 # --- Community feed ---
-# Request: {"user_id":string,"text":string,"share_opt_in":boolean}
-# Response: {"post_id":string,"preview":string}
 @app.post("/feed/post")
 def create_feed_post(payload: FeedPostRequest):
     user = _require_user(payload.user_id)
     if not payload.text.strip():
         raise HTTPException(status_code=422, detail="Text required.")
     post_id = _generate_id("post")
-    post_entry = {
-        "id": post_id,
-        "user_id": payload.user_id if payload.share_opt_in else None,
-        "text": payload.text.strip(),
-        "ts": datetime.utcnow().isoformat(),
-        "userRole": user["role"],
-    }
-    posts.insert(0, post_entry)
-    preview = f"{'Someone' if not post_entry['user_id'] else 'You'} shared an update."
+    timestamp = datetime.utcnow().isoformat()
+    database.execute(
+        """
+        INSERT INTO posts (id, user_id, text, ts, user_role)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            post_id,
+            payload.user_id if payload.share_opt_in else None,
+            payload.text.strip(),
+            timestamp,
+            user["role"],
+        ),
+    )
+    preview = "You shared an update." if payload.share_opt_in else "Someone shared an update."
     return {"post_id": post_id, "preview": preview}
 
 
-# Response: {"posts":[{"id":string,"text":string,"ts":ISO8601,"userRole":"borrower|lender"}]}
 @app.get("/feed")
 def get_feed():
+    rows = database.fetchall(
+        "SELECT id, user_id, text, ts, user_role FROM posts ORDER BY ts DESC",
+    )
+    posts = [
+        {
+            "id": row["id"],
+            "text": row["text"],
+            "ts": row["ts"],
+            "userRole": row["user_role"],
+        }
+        for row in rows
+    ]
     return {"posts": posts}
 
 
 # --- Dashboards ---
-# Response: {"next_payment":{"amount":number,"due_in_weeks":number},"total_owed_year":number,"savings_vs_bank_year":number}
 @app.get("/dashboard/borrower")
 def borrower_dashboard(user_id: str):
     _require_user(user_id)
-    amount = borrow_amounts.get(user_id, 200.0)
+    amount = _get_borrow_amount(user_id) or 200.0
     next_payment = round(min(amount / 10, 50), 2)
     return {
         "next_payment": {"amount": next_payment, "due_in_weeks": 1},
@@ -343,7 +574,6 @@ def borrower_dashboard(user_id: str):
     }
 
 
-# Response: {"next_payment":{"amount":number,"due_in_weeks":number},"expected_revenue_year":number}
 @app.get("/dashboard/lender")
 def lender_dashboard(user_id: str):
     user = _require_user(user_id)
@@ -352,3 +582,113 @@ def lender_dashboard(user_id: str):
         "next_payment": {"amount": round(capital * 0.01, 2), "due_in_weeks": 1},
         "expected_revenue_year": round(capital * 0.12, 2),
     }
+def _format_lender_id(user_id: str) -> str:
+    suffix = user_id.split("_", 1)[-1]
+    return f"Lender-{suffix[:4].upper()}"
+
+
+def _fetch_lenders(
+    community_id: Optional[str] = None,
+    require_lock: bool = False,
+) -> List[Dict]:
+    params: List = []
+    query = """
+        SELECT id, max_amount, min_rate
+        FROM users
+        WHERE role = 'lender'
+    """
+    if community_id:
+        query += " AND community_id = ?"
+        params.append(community_id)
+    if require_lock:
+        query += " AND location_locked = 1"
+    query += " ORDER BY min_rate ASC, max_amount DESC"
+    rows = database.fetchall(query, tuple(params))
+    return [
+        {
+            "id": row["id"],
+            "capital": float(row["max_amount"]),
+            "rate": float(row["min_rate"]),
+        }
+        for row in rows
+        if row["max_amount"] and row["max_amount"] > 0
+    ]
+
+
+def _allocate_from_lenders(amount: float, lenders: List[Dict]) -> List[Dict]:
+    remaining = amount
+    allocations = []
+    for lender in lenders:
+        if remaining <= 0:
+            break
+        available = lender["capital"]
+        contribution = min(available, remaining)
+        if contribution <= 0:
+            continue
+        allocations.append(
+            {
+                "lenderId": _format_lender_id(lender["id"]),
+                "amount": round(contribution, 2),
+                "rate": round(lender["rate"], 2),
+                "user_id": lender["id"],
+            }
+        )
+        remaining -= contribution
+    if remaining > 0:
+        return []
+
+    # Adjust for rounding drift so contributions sum to request amount.
+    total_assigned = sum(part["amount"] for part in allocations)
+    drift = round(amount - total_assigned, 2)
+    if allocations and drift:
+        allocations[-1]["amount"] = round(allocations[-1]["amount"] + drift, 2)
+    return allocations
+
+
+def _generate_lender_combos(amount: float, lenders: List[Dict]) -> List[Dict]:
+    combos: List[Dict] = []
+    seen_sources = set()
+    max_window = min(3, len(lenders))
+    for window in range(1, max_window + 1):
+        window_lenders = lenders[:window]
+        parts = _allocate_from_lenders(amount, window_lenders)
+        if not parts:
+            continue
+        source_ids = tuple(part["user_id"] for part in parts)
+        if source_ids in seen_sources:
+            continue
+        seen_sources.add(source_ids)
+        combos.append(
+            {
+                "id": f"c{len(combos) + 1}",
+                "total": round(amount, 2),
+                "parts": [
+                    {k: v for k, v in part.items() if k != "user_id"}
+                    for part in parts
+                ],
+                "source_user_ids": [part["user_id"] for part in parts],
+            }
+        )
+
+    if combos:
+        return combos
+
+    # Fall back to using the full lender list if earlier windows lacked coverage.
+    parts = _allocate_from_lenders(amount, lenders)
+    if parts:
+        source_ids = tuple(part["user_id"] for part in parts)
+        if source_ids in seen_sources:
+            return combos
+        seen_sources.add(source_ids)
+        combos.append(
+            {
+                "id": "c_all",
+                "total": round(amount, 2),
+                "parts": [
+                    {k: v for k, v in part.items() if k != "user_id"}
+                    for part in parts
+                ],
+                "source_user_ids": [part["user_id"] for part in parts],
+            }
+        )
+    return combos
