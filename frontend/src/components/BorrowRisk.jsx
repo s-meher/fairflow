@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBorrowRisk, postBorrowDecline } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
@@ -47,7 +47,8 @@ export default function BorrowRisk() {
     };
   }, [user?.userId]);
 
-  async function handleDecline() {
+  const fetchDeclineFeedback = useCallback(async () => {
+    if (!user?.userId) return;
     setDeclineLoading(true);
     try {
       const resp = await postBorrowDecline(user.userId);
@@ -57,6 +58,55 @@ export default function BorrowRisk() {
     } finally {
       setDeclineLoading(false);
     }
+  }, [user?.userId]);
+
+  useEffect(() => {
+    if (risk?.recommendation === 'no') {
+      fetchDeclineFeedback();
+    } else {
+      setDecline(null);
+    }
+  }, [risk?.recommendation, fetchDeclineFeedback]);
+
+  const improvementTips = useMemo(() => {
+    if (!risk) return [];
+    const tips = [];
+    const avgSpend = risk.knot_summary?.avg_monthly_spend;
+    if (typeof avgSpend === 'number' && avgSpend > 0) {
+      const trimAmount = Math.max(25, Math.round(avgSpend * 0.25));
+      tips.push({
+        title: 'Resize the request',
+        detail: `Try trimming about $${trimAmount} from this request so it lines up with your monthly spend.`,
+      });
+    } else {
+      tips.push({
+        title: 'Resize the request',
+        detail: 'Aim for a request that is about 20% lower to match your current cash flow.',
+      });
+    }
+    const essentialsRatio = risk.knot_summary?.essentials_ratio;
+    if (typeof essentialsRatio === 'number' && essentialsRatio < 0.65) {
+      tips.push({
+        title: 'Boost essentials share',
+        detail: 'Shift a few recent purchases toward groceries, utilities, or medical costs to show more essential spending.',
+      });
+    }
+    const merchantsLinked = risk.knot_summary?.merchants?.length ?? 0;
+    if (merchantsLinked < 2) {
+      tips.push({
+        title: 'Link another shop or bill',
+        detail: 'Adding one more Knot merchant gives Finance Bot clearer insight into your day-to-day habits.',
+      });
+    }
+    tips.push({
+      title: 'Build a small safety buffer',
+      detail: 'Setting aside even $25 each week in savings signals lenders you can absorb surprises.',
+    });
+    return tips;
+  }, [risk]);
+
+  async function handleDecline() {
+    await fetchDeclineFeedback();
   }
 
   if (!user) return null;
@@ -118,7 +168,7 @@ export default function BorrowRisk() {
             >
               <TrendingUp className="h-8 w-8 text-primary" />
             </motion.div>
-            Water Check
+            Risk Check
           </CardTitle>
           <div className="mt-2 flex flex-col gap-2">
             <p className="text-base text-muted-foreground leading-relaxed">{risk.explanation}</p>
@@ -165,12 +215,9 @@ export default function BorrowRisk() {
                 <div className="h-full flex-1 bg-gradient-to-r from-amber-300 to-amber-400" />
                 <div className="h-full flex-1 bg-gradient-to-r from-emerald-300 to-emerald-400" />
               </div>
-              <motion.div 
-                className="gauge-needle" 
+              <div
+                className="gauge-needle"
                 style={{ left: `calc(${risk.score}% - 3px)` }}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, type: "spring" }}
               />
             </div>
           </motion.div>
@@ -276,37 +323,50 @@ export default function BorrowRisk() {
               </motion.div>
             ) : (
               <div className="space-y-4">
+                <div className="rounded-3xl border border-rose-100 bg-rose-50/70 p-6 shadow-inner">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">
+                    Why it was paused
+                  </p>
+                  <p className="mt-2 text-base text-rose-900">{risk.explanation}</p>
+                  {decline && (
+                    <p className="mt-3 rounded-2xl border border-dashed border-rose-200 bg-white/80 p-3 text-sm text-rose-800">
+                      {decline}
+                    </p>
+                  )}
+                  <div className="mt-4 space-y-3">
+                    {improvementTips.map((tip) => (
+                      <div
+                        key={tip.title}
+                        className="rounded-2xl border border-white/40 bg-white/85 p-3 shadow-sm"
+                      >
+                        <p className="text-sm font-semibold text-rose-900">{tip.title}</p>
+                        <p className="text-sm text-muted-foreground">{tip.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <Button 
                   variant="outline" 
                   className="w-full"
                   onClick={handleDecline} 
                   disabled={declineLoading}
                 >
-                  {declineLoading ? 'Analyzing...' : 'Tell me more'}
+                  {declineLoading ? 'Refreshing guidance…' : 'Refresh guidance'}
                 </Button>
-                {decline && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl border-2 border-cyan-200 bg-white/90 p-6 backdrop-blur-sm"
+                <div className="flex flex-wrap gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate('/dashboard/borrower')}
                   >
-                    <p className="mb-4 text-base leading-relaxed">{decline}</p>
-                    <div className="flex flex-wrap gap-3">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => navigate('/dashboard/borrower')}
-                      >
-                        View Dashboard
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => navigate('/')}
-                      >
-                        Try Later
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
+                    View Dashboard
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => navigate('/')}
+                  >
+                    Try Later
+                  </Button>
+                </div>
               </div>
             )}
           </motion.div>

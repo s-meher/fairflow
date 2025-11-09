@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bot, Sparkles, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -81,8 +81,17 @@ function useFinanceBotChat(intro) {
 }
 
 function MessageBubbles({ messages, isThinking, compact = false }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [messages]);
+
   return (
     <div
+      ref={containerRef}
       className={`space-y-3 ${compact ? 'h-48' : 'h-64'} overflow-y-auto rounded-3xl bg-gradient-to-b from-sky-50/80 via-white to-white/80 p-4 text-sm shadow-inner shadow-sky-100 backdrop-blur`}
     >
       {messages.map((message) => (
@@ -113,7 +122,7 @@ export function FinanceBotPanel({ role = 'borrower' }) {
     () =>
       role === 'lender'
         ? 'Hello! Finance Bot can guide your lending strategy and celebrate every mindful return ✨'
-        : 'Hello! Finance Bot is here to keep borrowing plans gentle, clear, and sparkly 🌈',
+        : 'Finance Bot studies your linked shopping habits to sketch realistic savings moves and repayment pacing.',
     [role],
   );
   const { messages, input, setInput, isThinking, sendMessage } = useFinanceBotChat(intro);
@@ -199,7 +208,7 @@ export function FloatingFinanceBot() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 shadow-inner shadow-sky-100">
                   <Bot className="h-5 w-5 text-sky-500" />
                 </div>
-                Blue Wave Bot
+                Finance Bot
               </div>
               <button
                 type="button"
@@ -220,7 +229,7 @@ export function FloatingFinanceBot() {
               <Input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask Blue Wave anything…"
+                placeholder="Ask Finance Bot anything…"
                 className="h-11 border-sky-100 bg-white/70 text-xs text-sky-900 placeholder:text-sky-400"
                 disabled={isThinking}
               />
@@ -242,11 +251,11 @@ export function FloatingFinanceBot() {
         className="pointer-events-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-400/50 transition hover:scale-105 hover:shadow-blue-500/60"
       >
         <span className="text-3xl">{isOpen ? '💬' : '🌊'}</span>
-        <span className="sr-only">Toggle Blue Wave Bot</span>
+        <span className="sr-only">Toggle Finance Bot</span>
       </button>
       {!isOpen && (
         <div className="pointer-events-none rounded-full bg-white/80 px-4 py-1 text-xs font-semibold text-sky-600 shadow">
-          Chat with Blue Wave Bot?
+          Chat with Finance Bot?
         </div>
       )}
     </div>

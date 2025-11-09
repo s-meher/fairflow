@@ -20,7 +20,7 @@ import string
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, File, Form, UploadFile
@@ -463,6 +463,56 @@ class FinanceBotRequest(BaseModel):
 
 class FinanceBotResponse(BaseModel):
     reply: str
+
+
+def _fallback_finance_reply(prompt: str, history: List[FinanceBotMessage]) -> str:
+    """Deterministic backup guidance when Gemini is unavailable."""
+
+    def _field(entry: Any, attr: str) -> str:
+        if hasattr(entry, attr):
+            return getattr(entry, attr) or ""
+        if isinstance(entry, dict):
+            return entry.get(attr, "") or ""
+        return ""
+
+    last_user_text = ""
+    for entry in reversed(history):
+        if _field(entry, "sender") == "user":
+            last_user_text = _field(entry, "text").strip()
+            if last_user_text:
+                break
+
+    prompt_lower = prompt.lower()
+    base_close = " Once you adjust those pieces, ask me again and I can sketch the next steps."
+
+    if any(word in prompt_lower for word in ("deny", "decline", "reject", "why", "fix")):
+        return (
+            "Your latest request was paused because the risk gauge is still in the orange zone. "
+            "Trim about 20% off the requested loan, link another everyday merchant, and show at least two weeks of savings activity."
+            + base_close
+        )
+
+    if any(word in prompt_lower for word in ("loan", "apply", "approval", "qualify")):
+        return (
+            "To move toward a Symbio loan, lock in your ID, keep essentials spending above 65%, "
+            "and size the request so weekly payments stay under 10% of your take-home pay."
+            + base_close
+        )
+
+    if any(word in prompt_lower for word in ("save", "savings", "budget", "plan", "spend", "shopping")):
+        return (
+            "Start a three-step savings plan: 1) earmark a fixed amount right after payday, "
+            "2) move one discretionary purchase each week into an essentials bucket, "
+            "3) snapshot balances every Sunday so Symbio sees a steady cushion."
+            + base_close
+        )
+
+    echo = f" (Last note from you: {last_user_text})" if last_user_text and last_user_text != prompt else ""
+    return (
+        "Finance Bot is in offline mode, so I am sharing playbook tips from past borrowers. "
+        "Keep your essentials share high, pad savings for two weeks, and tighten the request if payments feel heavy."
+        + echo
+    )
 
 
 def _community_from_geo(geo: Geo) -> str:
@@ -1037,13 +1087,16 @@ def lender_dashboard(user_id: str):
 
 @app.post("/finance-bot", response_model=FinanceBotResponse)
 async def finance_bot(payload: FinanceBotRequest):
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="Finance Bot is offline right now.")
+    logger.info("Finance Bot request received: prompt length=%s, history=%s", len(payload.prompt or ""), len(payload.history))
     prompt = payload.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=422, detail="Prompt is required.")
 
     trimmed_history = payload.history[-FINANCE_BOT_HISTORY_LIMIT :]
+    if not GEMINI_API_KEY:
+        logger.warning("Finance Bot missing GEMINI_API_KEY, falling back.")
+        return {"reply": _fallback_finance_reply(prompt, trimmed_history)}
+
     contents: List[Dict[str, object]] = []
     for entry in trimmed_history:
         text = entry.text.strip()
@@ -1061,7 +1114,10 @@ async def finance_bot(payload: FinanceBotRequest):
 
     endpoint = f"{FINANCE_BOT_URL}/{FINANCE_BOT_MODEL}:generateContent"
 
+    logger.info("Finance Bot calling Gemini model=%s endpoint=%s", FINANCE_BOT_MODEL, endpoint)
+
     try:
+        logger.debug("Finance Bot payload preview: %s", json.dumps(body).encode("utf-8")[:400])
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 endpoint,
@@ -1070,19 +1126,24 @@ async def finance_bot(payload: FinanceBotRequest):
                 json=body,
             )
     except httpx.RequestError as exc:  # pragma: no cover - network defensive
-        raise HTTPException(status_code=502, detail="Finance Bot request failed.") from exc
+        logger.warning("Finance Bot Gemini request error: %s", exc)
+        return {"reply": _fallback_finance_reply(prompt, trimmed_history)}
 
     if response.status_code >= 400:
+        logger.warning("Finance Bot Gemini non-200 status: %s body=%s", response.status_code, response.text)
         try:
             error_detail = response.json().get("error", {}).get("message")
         except Exception:  # pragma: no cover - defensive
             error_detail = None
-        raise HTTPException(status_code=response.status_code, detail=error_detail or "Finance Bot error.")
+        logger.warning("Finance Bot Gemini error %s: %s", response.status_code, error_detail)
+        return {"reply": _fallback_finance_reply(prompt, trimmed_history)}
 
     try:
         payload_json = response.json()
+        logger.debug("Finance Bot Gemini raw response: %s", json.dumps(payload_json)[:600])
     except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=502, detail="Finance Bot returned invalid data.") from exc
+        logger.warning("Finance Bot Gemini payload decode error: %s", exc)
+        return {"reply": _fallback_finance_reply(prompt, trimmed_history)}
 
     reply = ""
     for candidate in payload_json.get("candidates", []):
@@ -1093,7 +1154,10 @@ async def finance_bot(payload: FinanceBotRequest):
             break
 
     if not reply:
-        reply = "Finance Bot is unsure how to help with that right now."
+        logger.warning("Finance Bot Gemini returned empty reply, using fallback.")
+        reply = _fallback_finance_reply(prompt, trimmed_history)
+    else:
+        logger.info("Finance Bot Gemini success, reply length=%s", len(reply))
     return {"reply": reply}
 
 def _format_lender_id(user_id: str) -> str:

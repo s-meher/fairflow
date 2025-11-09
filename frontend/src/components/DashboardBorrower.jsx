@@ -7,6 +7,8 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Sparkles, ShoppingBag } from 'lucide-react';
+import { FinanceBotPanel } from './FinanceBot';
 
 export default function DashboardBorrower() {
   const user = useRequiredUser();
@@ -63,6 +65,12 @@ export default function DashboardBorrower() {
 
   const savingsChartConfig = {
     savings: { label: 'Savings vs bank', color: 'hsl(25.5 95% 53.5%)' },
+  };
+
+  const handleScrollToBot = () => {
+    if (typeof document === 'undefined') return;
+    const panel = document.getElementById('finance-bot-panel');
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
@@ -194,6 +202,46 @@ export default function DashboardBorrower() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.1fr,0.9fr]">
+              <Card className="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-indigo-50 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sky-900">
+                    <ShoppingBag className="h-5 w-5 text-sky-500" />
+                    Shopping habits snapshot
+                  </CardTitle>
+                  <CardDescription>
+                    Symbio watches the merchants you link to estimate what can safely flow into savings.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-slate-600">
+                  <div className="flex items-start gap-3 rounded-2xl border border-dashed border-sky-100/80 bg-white/70 p-3">
+                    <Sparkles className="mt-0.5 h-4 w-4 text-sky-500" />
+                    <p>
+                      Finance Bot blends your grocery, utility, and treat spending into a step-by-step savings ladder,
+                      then adjusts payments if habits change.
+                    </p>
+                  </div>
+                  <ul className="space-y-2">
+                    <li className="rounded-2xl bg-white/80 px-3 py-2">
+                      Track how much of last month&apos;s shopping was essential vs. nice-to-have.
+                    </li>
+                    <li className="rounded-2xl bg-white/80 px-3 py-2">
+                      Get nudges on trimming requests or padding savings before reapplying.
+                    </li>
+                    <li className="rounded-2xl bg-white/80 px-3 py-2">
+                      Export a weekly “cash cushion” plan based on your linked merchants.
+                    </li>
+                  </ul>
+                  <Button onClick={handleScrollToBot} className="w-full">
+                    Ask Finance Bot for a plan
+                  </Button>
+                </CardContent>
+              </Card>
+              <div id="finance-bot-panel" className="h-full">
+                <FinanceBotPanel role="borrower" />
+              </div>
             </div>
           </>
         ) : (
