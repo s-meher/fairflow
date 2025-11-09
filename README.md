@@ -25,7 +25,9 @@
 
 ## 🧠 How It Works
 
-📊 **(DIAGRAM GOES HERE)**  
+![FairFlow Architecture Diagram](drawings/imgs/FairFlow_ArchitectureDiagram.png)
+
+![FairFlow Technical Diagram](drawings/imgs/FairFlow_TechnicalDiagram.png)
 *Community Lending → ID Verification → AI Vetting → Multi-Lender Match → Transparent Repayment*
 
 ---
