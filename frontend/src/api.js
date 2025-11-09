@@ -84,6 +84,18 @@ export async function fetchLenderDashboard(userId) {
   return data;
 }
 
+export async function linkKnotAccount(payload) {
+  // POST /knot/link -> {linked, merchant, sample_transactions, profile}
+  const { data } = await api.post('/knot/link', payload);
+  return data;
+}
+
+export async function fetchKnotProfile(userId) {
+  // GET /knot/profile -> {merchants,transactions,updated_at}
+  const { data } = await api.get('/knot/profile', { params: { user_id: userId } });
+  return data;
+}
+
 export async function askFinanceBot(payload) {
   // POST /finance-bot -> {reply:string}
   const { data } = await api.post('/finance-bot', payload);

@@ -8,13 +8,17 @@ later via environment flags.
 from __future__ import annotations
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import json
+import logging
 import os
 import random
+import re
 import string
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -28,6 +32,8 @@ from . import database
 # Load optional env keys for future integrations.
 KNOT_API_KEY = os.getenv("KNOT_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
+GROK_MODEL = os.getenv("GROK_MODEL", "grok-4-mini")
+GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai")
 NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -45,6 +51,40 @@ BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
 COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
 DEFAULT_COMMUNITY_LAT = float(os.getenv("DEFAULT_COMMUNITY_LAT", "40.3573"))
 DEFAULT_COMMUNITY_LNG = float(os.getenv("DEFAULT_COMMUNITY_LNG", "-74.6672"))
+KNOT_DATA_DIR = Path(__file__).resolve().parent / "knot_mock_data"
+KNOT_MERCHANTS = {
+    45: {
+        "merchant_name": "Walmart Supercenter",
+        "slug": "walmart",
+        "file": "development_45_walmart.json",
+        "description": "Groceries & household supplies",
+    },
+    19: {
+        "merchant_name": "DoorDash",
+        "slug": "doordash",
+        "file": "development_19_doordash.json",
+        "description": "Food delivery history",
+    },
+}
+ESSENTIAL_KEYWORDS = (
+    "grocery",
+    "milk",
+    "baby",
+    "diaper",
+    "produce",
+    "household",
+    "electric",
+    "utility",
+    "medicine",
+    "pharmacy",
+    "tuition",
+    "rent",
+    "gas",
+    "school",
+    "food",
+    "meal",
+    "pantry",
+)
 
 INTEGRATIONS_ENABLED = {
     "knot": bool(KNOT_API_KEY),
@@ -52,6 +92,8 @@ INTEGRATIONS_ENABLED = {
     "nessie": bool(NESSIE_API_KEY),
     "x": bool(X_API_KEY),
 }
+
+logger = logging.getLogger(__name__)
 
 database.init_db()
 
@@ -102,6 +144,191 @@ def _safe_document_extension(filename: Optional[str], content_type: str) -> str:
     return MIME_EXTENSION_MAP.get(content_type, ".jpg")
 
 
+@lru_cache(maxsize=8)
+def _load_knot_orders(merchant_id: int) -> List[Dict]:
+    meta = KNOT_MERCHANTS.get(merchant_id)
+    if not meta:
+        raise KeyError(f"Unknown merchant id {merchant_id}")
+    path = KNOT_DATA_DIR / meta["file"]
+    if not path.exists():
+        raise FileNotFoundError(f"Mock data file missing for merchant {merchant_id}")
+    with path.open() as fp:
+        return json.load(fp)
+
+
+def _is_essential_purchase(text: str) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(keyword in lowered for keyword in ESSENTIAL_KEYWORDS)
+
+
+def _orders_to_transactions(merchant_id: int) -> List[Dict]:
+    meta = KNOT_MERCHANTS[merchant_id]
+    orders = _load_knot_orders(merchant_id)
+    transactions: List[Dict] = []
+    for order in orders:
+        amount = float(order.get("price", {}).get("total") or 0)
+        if amount <= 0:
+            continue
+        products = order.get("products", [])
+        product_names = [p.get("name", "").strip() for p in products if p.get("name")]
+        description = ", ".join(product_names[:2]) or meta["description"]
+        if len(product_names) > 2:
+            description += "…"
+        essential = any(
+            _is_essential_purchase(prod.get("name", ""))
+            or any(_is_essential_purchase(tag) for tag in prod.get("eligibility", []))
+            for prod in products
+        )
+        transactions.append(
+            {
+                "id": f"{meta['slug']}_{order.get('externalId')}",
+                "merchant": meta["merchant_name"],
+                "merchant_id": merchant_id,
+                "amount": round(amount, 2),
+                "category": order.get("orderStatus", "order").lower(),
+                "description": description,
+                "is_essential": essential,
+                "posted_at": order.get("dateTime", datetime.utcnow().isoformat()),
+            }
+        )
+    return transactions
+
+
+def _get_knot_profile(user_id: str) -> Optional[Dict]:
+    row = database.fetchone(
+        "SELECT merchants_json, transactions_json, updated_at FROM knot_profiles WHERE user_id = ?",
+        (user_id,),
+    )
+    if not row:
+        return None
+    merchants = json.loads(row["merchants_json"])
+    transactions = json.loads(row["transactions_json"])
+    return {
+        "merchants": merchants,
+        "transactions": transactions,
+        "updated_at": row["updated_at"],
+    }
+
+
+def _save_knot_profile(user_id: str, merchants: List[Dict], transactions: List[Dict]) -> Dict:
+    updated_at = datetime.utcnow().isoformat()
+    database.execute(
+        """
+        INSERT INTO knot_profiles (user_id, merchants_json, transactions_json, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            merchants_json = excluded.merchants_json,
+            transactions_json = excluded.transactions_json,
+            updated_at = excluded.updated_at
+        """,
+        (user_id, json.dumps(merchants), json.dumps(transactions), updated_at),
+    )
+    return {"merchants": merchants, "transactions": transactions, "updated_at": updated_at}
+
+
+def _compute_knot_summary(profile: Optional[Dict]) -> Optional[Dict]:
+    if not profile:
+        return None
+    transactions = profile.get("transactions") or []
+    if not transactions:
+        return None
+    total = sum(t.get("amount", 0) for t in transactions)
+    if total <= 0:
+        return None
+    essentials = sum(t.get("amount", 0) for t in transactions if t.get("is_essential"))
+    merchants = profile.get("merchants", [])
+    return {
+        "merchants": [m.get("merchant_name") for m in merchants],
+        "avg_monthly_spend": round(total / 3, 2),
+        "orders": len(transactions),
+        "essentials_ratio": round(essentials / total, 2) if total else 0,
+        "last_sync": profile.get("updated_at"),
+    }
+
+
+def _extract_json_blob(text: Optional[str]) -> Optional[Dict]:
+    if not text:
+        return None
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def _format_transactions_for_prompt(transactions: List[Dict], limit: int = 5) -> str:
+    snippets = []
+    for txn in transactions[:limit]:
+        snippets.append(
+            f"- {txn['posted_at'][:10]} • {txn['merchant']} • ${txn['amount']:.2f} • {txn['description']}"
+        )
+    return "\n".join(snippets) if snippets else "No purchase history linked."
+
+
+def _call_grok_risk_analysis(
+    user_id: str,
+    amount: float,
+    knot_summary: Optional[Dict],
+    transactions: List[Dict],
+) -> Optional[Dict]:
+    if not GROK_API_KEY:
+        return None
+    prompt_lines = [
+        f"Borrow request amount: ${amount:.2f}",
+        f"Linked merchants: {', '.join(knot_summary['merchants'])}" if knot_summary else "No linked merchants.",
+        f"Average monthly spend: ${knot_summary['avg_monthly_spend']:.2f}" if knot_summary else "",
+        f"Essentials ratio: {int((knot_summary['essentials_ratio'] or 0) * 100)}%" if knot_summary else "",
+        "Recent purchases:",
+        _format_transactions_for_prompt(transactions),
+        "Return JSON with keys: score (0-100 integer, higher means safer), recommendation ('yes','maybe','no'), explanation (<=40 words).",
+    ]
+    payload = {
+        "model": GROK_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are Grok, an AI credit analyst for community microlending. Reply ONLY with JSON.",
+            },
+            {"role": "user", "content": "\n".join(line for line in prompt_lines if line)},
+        ],
+        "temperature": 0.2,
+    }
+    headers = {"Authorization": f"Bearer {GROK_API_KEY}", "Content-Type": "application/json"}
+    try:
+        response = httpx.post(
+            f"{GROK_BASE_URL.rstrip('/')}/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=20,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("Grok risk call failed for user %s: %s", user_id, exc)
+        return None
+
+    data = response.json()
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content")
+    parsed = _extract_json_blob(content)
+    if not parsed:
+        logger.warning("Grok response unparsable for user %s: %s", user_id, content)
+        return None
+    return {
+        "score": parsed.get("score"),
+        "recommendation": parsed.get("recommendation"),
+        "explanation": parsed.get("explanation"),
+        "model": data.get("model") or GROK_MODEL,
+    }
+
+
 # ---- Models ----
 class Geo(BaseModel):
     lat: float
@@ -149,6 +376,11 @@ class FeedPostRequest(BaseModel):
     user_id: str
     text: str
     share_opt_in: bool
+
+
+class KnotLinkRequest(BaseModel):
+    user_id: str
+    merchant_id: int = Field(ge=1)
 
 
 class FinanceBotMessage(BaseModel):
@@ -225,7 +457,23 @@ def _risk_logic(user_id: str) -> Dict:
     ratio = amount / ceiling if ceiling else 1
     ratio = min(max(ratio, 0), 1.2)
     base_score = max(5, 95 - ratio * 60)
-    score = round(base_score)
+
+    knot_profile = _get_knot_profile(user_id)
+    knot_summary = _compute_knot_summary(knot_profile)
+    adjustment = 0
+    if knot_summary:
+        ess_ratio = knot_summary.get("essentials_ratio") or 0
+        avg_spend = knot_summary.get("avg_monthly_spend") or 0
+        if ess_ratio >= 0.65:
+            adjustment += 5
+        elif ess_ratio < 0.45:
+            adjustment -= 5
+        if avg_spend <= 600:
+            adjustment += 3
+        elif avg_spend > 900:
+            adjustment -= 3
+
+    score = max(5, min(95, round(base_score + adjustment)))
     if score >= 70:
         label = "low"
         recommendation = "yes"
@@ -235,15 +483,96 @@ def _risk_logic(user_id: str) -> Dict:
     else:
         label = "high"
         recommendation = "no"
+
     explanation = (
         f"Request of ${amount:.0f} vs savings capacity suggests {label} risk relative to peers."
     )
-    return {
+    if knot_summary:
+        explanation += (
+            f" Linked merchants ({', '.join(knot_summary['merchants'])}) show ${knot_summary['avg_monthly_spend']}"
+            f" monthly spend with {int(knot_summary['essentials_ratio'] * 100)}% essentials."
+        )
+
+    result = {
         "score": score,
         "label": label,
         "explanation": explanation,
         "recommendation": recommendation,
+        "analysis_source": "rules",
     }
+    if knot_summary:
+        result["knot_summary"] = knot_summary
+
+    grok_result = _call_grok_risk_analysis(
+        user_id,
+        amount,
+        knot_summary,
+        knot_profile["transactions"] if knot_profile else [],
+    )
+    if grok_result:
+        grok_score = grok_result.get("score")
+        try:
+            grok_score = max(5, min(95, int(round(float(grok_score)))))
+        except (TypeError, ValueError):
+            grok_score = result["score"]
+        result["analysis_source"] = "grok"
+        result["score"] = grok_score
+        result["label"] = "low" if grok_score >= 70 else "med" if grok_score >= 45 else "high"
+        grok_rec = (grok_result.get("recommendation") or "").lower()
+        if grok_rec in {"yes", "maybe", "no"}:
+            result["recommendation"] = grok_rec
+        if grok_result.get("explanation"):
+            result["explanation"] = grok_result["explanation"]
+        if grok_result.get("model"):
+            result["analysis_model"] = grok_result["model"]
+
+    return result
+
+
+# --- Knot mock linking ---
+@app.post("/knot/link")
+def link_knot_account(payload: KnotLinkRequest):
+    _require_user(payload.user_id)
+    merchant_meta = KNOT_MERCHANTS.get(payload.merchant_id)
+    if not merchant_meta:
+        raise HTTPException(status_code=400, detail="Unsupported merchant.")
+
+    transactions_new = _orders_to_transactions(payload.merchant_id)
+    total = sum(t["amount"] for t in transactions_new)
+    essentials = sum(t["amount"] for t in transactions_new if t["is_essential"])
+    merchant_summary = {
+        "merchant_id": payload.merchant_id,
+        "merchant_name": merchant_meta["merchant_name"],
+        "avg_monthly_spend": round(total / 3, 2) if total else 0,
+        "orders": len(transactions_new),
+        "essentials_ratio": round(essentials / total, 2) if total else 0,
+        "last_sync": datetime.utcnow().isoformat(),
+    }
+
+    profile = _get_knot_profile(payload.user_id) or {"merchants": [], "transactions": []}
+    merchants = [m for m in profile["merchants"] if m.get("merchant_id") != payload.merchant_id]
+    merchants.append(merchant_summary)
+    transactions = [
+        txn for txn in profile.get("transactions", []) if txn.get("merchant_id") != payload.merchant_id
+    ]
+    transactions.extend(transactions_new)
+    saved = _save_knot_profile(payload.user_id, merchants, transactions)
+
+    return {
+        "linked": True,
+        "merchant": merchant_summary,
+        "sample_transactions": transactions_new[:5],
+        "profile": saved,
+    }
+
+
+@app.get("/knot/profile")
+def get_knot_profile(user_id: str):
+    _require_user(user_id)
+    profile = _get_knot_profile(user_id)
+    if not profile:
+        return {"merchants": [], "transactions": [], "updated_at": None}
+    return profile
 
 
 # --- Auth/Session ---
