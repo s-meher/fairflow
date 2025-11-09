@@ -6,7 +6,6 @@ import BorrowReason from './components/BorrowReason';
 import BorrowAmount from './components/BorrowAmount';
 import BorrowRisk from './components/BorrowRisk';
 import BorrowOptions from './components/BorrowOptions';
-import PostPreview from './components/PostPreview';
 import CommunityFeed from './components/CommunityFeed';
 import LenderSetup from './components/LenderSetup';
 import DashboardHome from './components/DashboardHome';
@@ -25,7 +24,6 @@ export default function App() {
         <Route path="/borrow/amount" element={<BorrowAmount />} />
         <Route path="/borrow/risk" element={<BorrowRisk />} />
         <Route path="/borrow/options" element={<BorrowOptions />} />
-        <Route path="/post/preview" element={<PostPreview />} />
         <Route path="/feed" element={<CommunityFeed />} />
         <Route path="/lender/setup" element={<LenderSetup />} />
         <Route path="/dashboard" element={<DashboardHome />} />

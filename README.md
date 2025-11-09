@@ -47,3 +47,8 @@ To pull in additional shadcn/ui primitives:
 cd frontend
 npx shadcn-ui add <component>
 ```
+
+## Optional integrations
+
+- **Purchase linking + Grok scoring**: Drop your Knot mock data (already in `backend/app/knot_mock_data/`) and set `GROK_API_KEY` / `GROK_MODEL` so `/borrow/risk` calls xAI Grok with real transaction summaries.
+- **X/Twitter feed**: Set `X_API_KEY` (Bearer token). The backend exposes `GET /x/feed?handle=raymo8980`, which the Community Feed page uses to display the latest tweets inline with community posts.

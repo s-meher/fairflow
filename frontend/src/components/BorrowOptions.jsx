@@ -6,7 +6,7 @@ import { getSessionValue, setSessionValue } from '../session';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Waves, Users, Check, ArrowRight, Share2, Zap } from 'lucide-react';
+import { Waves, Users, Check, ArrowRight, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function BorrowOptions() {
@@ -275,14 +275,6 @@ export default function BorrowOptions() {
                     >
                       <Zap className="mr-2 h-4 w-4" />
                       Simulate Flow
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => navigate('/post/preview')}
-                      className="flex-1"
-                    >
-                      <Share2 className="mr-2 h-4 w-4" />
-                      Share (optional)
                     </Button>
                   </div>
 

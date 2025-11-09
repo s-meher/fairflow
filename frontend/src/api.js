@@ -60,15 +60,8 @@ export async function transferNessie(matchId) {
   return data;
 }
 
-export async function postFeed(payload) {
-  // POST /feed/post -> {post_id,preview}
-  const { data } = await api.post('/feed/post', payload);
-  return data;
-}
-
-export async function fetchFeed() {
-  // GET /feed -> {posts:[...]}
-  const { data } = await api.get('/feed');
+export async function fetchXFeed(handle = 'raymo8980') {
+  const { data } = await api.get('/x/feed', { params: { handle } });
   return data;
 }
 

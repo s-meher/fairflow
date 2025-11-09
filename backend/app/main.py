@@ -17,10 +17,10 @@ import os
 import random
 import re
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import FastAPI, HTTPException, File, Form, UploadFile
@@ -105,6 +105,9 @@ logger = logging.getLogger(__name__)
 
 database.init_db()
 
+_x_user_cache: Dict[str, Tuple[str, datetime]] = {}
+_x_tweet_cache: Dict[str, Tuple[List[Dict], datetime]] = {}
+
 ID_UPLOAD_DIR = Path(
     os.getenv(
         "ID_UPLOAD_DIR",
@@ -150,6 +153,69 @@ def _safe_document_extension(filename: Optional[str], content_type: str) -> str:
     if suffix in ALLOWED_ID_EXTENSIONS:
         return suffix
     return MIME_EXTENSION_MAP.get(content_type, ".jpg")
+
+
+def _x_headers() -> Dict[str, str]:
+    if not X_API_KEY:
+        raise HTTPException(status_code=503, detail="X integration disabled")
+    return {"Authorization": f"Bearer {X_API_KEY}"}
+
+
+def _get_x_user_id(handle: str) -> str:
+    key = handle.lower()
+    cached = _x_user_cache.get(key)
+    if cached and cached[1] > datetime.utcnow() - timedelta(hours=6):
+        return cached[0]
+    url = f"https://api.x.com/2/users/by/username/{handle}"
+    try:
+        resp = httpx.get(url, headers=_x_headers(), timeout=10)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to reach X API: {exc}") from exc
+    data = resp.json()
+    user_id = data.get("data", {}).get("id")
+    if not user_id:
+        raise HTTPException(status_code=404, detail="X user not found")
+    _x_user_cache[key] = (user_id, datetime.utcnow())
+    return user_id
+
+
+def _get_x_tweets(handle: str, limit: int) -> List[Dict]:
+    limit = max(1, min(limit, 20))
+    cache_key = f"{handle.lower()}:{limit}"
+    cached = _x_tweet_cache.get(cache_key)
+    if cached and cached[1] > datetime.utcnow() - timedelta(minutes=1):
+        return cached[0]
+
+    user_id = _get_x_user_id(handle)
+    params = {
+        "max_results": str(limit),
+        "tweet.fields": "created_at,public_metrics,text",
+        "exclude": "replies",
+    }
+    url = f"https://api.x.com/2/users/{user_id}/tweets"
+    try:
+        resp = httpx.get(url, headers=_x_headers(), params=params, timeout=10)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch tweets: {exc}") from exc
+    payload = resp.json()
+    tweets = []
+    for item in payload.get("data", []):
+        metrics = item.get("public_metrics") or {}
+        tweets.append(
+            {
+                "id": item.get("id"),
+                "text": item.get("text"),
+                "created_at": item.get("created_at"),
+                "like_count": metrics.get("like_count"),
+                "retweet_count": metrics.get("retweet_count"),
+                "reply_count": metrics.get("reply_count"),
+                "quote_count": metrics.get("quote_count"),
+            }
+        )
+    _x_tweet_cache[cache_key] = (tweets, datetime.utcnow())
+    return tweets
 
 
 @lru_cache(maxsize=8)
@@ -970,46 +1036,10 @@ def mock_transfer(payload: NessieTransferRequest):
     return {"txn_id": txn_id, "message": "Funds transferred (mock)"}
 
 
-# --- Community feed ---
-@app.post("/feed/post")
-def create_feed_post(payload: FeedPostRequest):
-    user = _require_user(payload.user_id)
-    if not payload.text.strip():
-        raise HTTPException(status_code=422, detail="Text required.")
-    post_id = _generate_id("post")
-    timestamp = datetime.utcnow().isoformat()
-    database.execute(
-        """
-        INSERT INTO posts (id, user_id, text, ts, user_role)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            post_id,
-            payload.user_id if payload.share_opt_in else None,
-            payload.text.strip(),
-            timestamp,
-            user["role"],
-        ),
-    )
-    preview = "You shared an update." if payload.share_opt_in else "Someone shared an update."
-    return {"post_id": post_id, "preview": preview}
-
-
-@app.get("/feed")
-def get_feed():
-    rows = database.fetchall(
-        "SELECT id, user_id, text, ts, user_role FROM posts ORDER BY ts DESC",
-    )
-    posts = [
-        {
-            "id": row["id"],
-            "text": row["text"],
-            "ts": row["ts"],
-            "userRole": row["user_role"],
-        }
-        for row in rows
-    ]
-    return {"posts": posts}
+@app.get("/x/feed")
+def x_feed(handle: str = "raymo8980", limit: int = 10):
+    tweets = _get_x_tweets(handle, limit)
+    return {"handle": handle, "tweets": tweets}
 
 
 # --- Dashboards ---
