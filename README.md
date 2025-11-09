@@ -60,7 +60,6 @@ cp .env.example .env
 ```bash
 KNOT_API_KEY=
 GROK_API_KEY=
-NESSIE_API_KEY=
 X_API_KEY=
 BANK_AVG_RATE=9.5
 ```
