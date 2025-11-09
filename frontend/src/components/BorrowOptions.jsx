@@ -266,6 +266,13 @@ export default function BorrowOptions() {
 
                   <div className="flex flex-wrap gap-3">
                     <Button 
+                      onClick={() => navigate('/dashboard/borrower')}
+                      className="flex-1"
+                    >
+                      <ArrowRight className="mr-2 h-4 w-4" />
+                      View dashboard
+                    </Button>
+                    <Button 
                       variant="outline" 
                       onClick={handleTransfer}
                       className="flex-1"

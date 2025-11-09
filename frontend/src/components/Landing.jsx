@@ -101,6 +101,9 @@ export default function Landing() {
           
           {/* Subtitle */}
           <motion.div variants={item} className="mx-auto max-w-3xl">
+            <p className="mb-3 text-lg md:text-xl font-semibold text-primary/90">
+              Fair lending. No sharks.
+            </p>
             <p className="mb-4 text-2xl md:text-3xl font-bold text-primary">
               Dive into fair lending
             </p>
@@ -136,6 +139,19 @@ export default function Landing() {
                 >
                   <Waves className="mr-2 h-5 w-5" />
                   Community Flow
+                </Button>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button 
+                  variant="outline"
+                  size="lg" 
+                  className="min-w-[200px]"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  Dashboard
                 </Button>
               </motion.div>
             </div>

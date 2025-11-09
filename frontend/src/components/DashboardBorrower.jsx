@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBorrowerDashboard } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
-import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { FinanceBotPanel } from './FinanceBot';
 
@@ -28,16 +30,69 @@ export default function DashboardBorrower() {
 
   if (!user) return null;
 
+  const paymentSchedule = useMemo(() => {
+    if (!data) return [];
+    const nextAmount = Number(data.next_payment?.amount) || 0;
+    const totalOwed = Number(data.total_owed_year) || 0;
+    let remainingBalance = totalOwed;
+    return Array.from({ length: 8 }, (_, index) => {
+      const installment = Math.max(nextAmount - index * Math.max(nextAmount * 0.12, 10), nextAmount * 0.4);
+      remainingBalance = Math.max(remainingBalance - installment, 0);
+      return {
+        label: `Week ${index + 1}`,
+        payment: Math.round(installment),
+        balance: Math.round(remainingBalance),
+      };
+    });
+  }, [data]);
+
+  const savingsGrowth = useMemo(() => {
+    if (!data) return [];
+    const annualSavings = Number(data.savings_vs_bank_year) || 0;
+    const monthlySavings = annualSavings / 12;
+    return Array.from({ length: 6 }, (_, index) => ({
+      label: `Month ${index + 1}`,
+      savings: Math.round(monthlySavings * (index + 1)),
+    }));
+  }, [data]);
+
+  const paymentChartConfig = {
+    payment: { label: 'Projected payment', color: 'hsl(217.2 91.2% 59.8%)' },
+    balance: { label: 'Remaining balance', color: 'hsl(142.1 70.6% 45.3%)' },
+  };
+
+  const savingsChartConfig = {
+    savings: { label: 'Savings vs bank', color: 'hsl(25.5 95% 53.5%)' },
+  };
+
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Borrower dashboard</h1>
+          <p className="text-muted-foreground">
+            Track repayments, savings impact, and stay connected with lenders.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+            Dashboard home
+          </Button>
+          <Button onClick={() => navigate('/dashboard/lender')}>Switch to lending</Button>
+        </div>
+      </div>
+
       <Tabs value="borrower" className="w-full">
-        <TabsList className="w-full justify-between">
-          <TabsTrigger value="borrower">Borrowing</TabsTrigger>
-          <TabsTrigger value="lender" onClick={() => navigate('/dashboard/lender')}>
+        <TabsList className="w-full justify-start gap-2 rounded-2xl bg-muted p-1">
+          <TabsTrigger value="borrower" className="flex-1">
+            Borrowing
+          </TabsTrigger>
+          <TabsTrigger value="lender" className="flex-1" onClick={() => navigate('/dashboard/lender')}>
             Lending
           </TabsTrigger>
         </TabsList>
       </Tabs>
+
       {error && <p className="text-destructive">{error}</p>}
       <div className="grid gap-4">
         {data ? (

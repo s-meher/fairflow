@@ -9,6 +9,7 @@ import BorrowOptions from './components/BorrowOptions';
 import PostPreview from './components/PostPreview';
 import CommunityFeed from './components/CommunityFeed';
 import LenderSetup from './components/LenderSetup';
+import DashboardHome from './components/DashboardHome';
 import DashboardBorrower from './components/DashboardBorrower';
 import DashboardLender from './components/DashboardLender';
 import { FloatingFinanceBot } from './components/FinanceBot';
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/post/preview" element={<PostPreview />} />
         <Route path="/feed" element={<CommunityFeed />} />
         <Route path="/lender/setup" element={<LenderSetup />} />
+        <Route path="/dashboard" element={<DashboardHome />} />
         <Route path="/dashboard/borrower" element={<DashboardBorrower />} />
         <Route path="/dashboard/lender" element={<DashboardLender />} />
         <Route path="*" element={<Landing />} />
