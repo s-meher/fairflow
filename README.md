@@ -1,4 +1,4 @@
-# 🪩 Symbio: Fair Lending. No Sharks. 🦈🚫
+# 🪸 Symbio: Fair Lending. No Sharks. 🦈🚫
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)  
 [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org)  
@@ -6,8 +6,7 @@
 [![Vite](https://img.shields.io/badge/Vite-5.4-purple?logo=vite)](https://vitejs.dev)
 
 > **A crowdsourced, community-oriented loan platform** where borrowers and lenders are verified members of the *same geographic community* — using ID verification to build real trust.  
-> Interest rates are **capped at the national average bank rate** (default: 9.5%) — no predatory Klarna-style gouging.  
-> Lenders bid the lowest rate they’re willing to accept, borrowers pick their amount, and our **AI algorithm stitches together multiple offers** to fund the exact need.
+> Lenders bid the lowest rate they’re willing to accept, borrowers pick their amount, and our algorithm stitches together multiple offers** to fund the exact need.
 
 ---
 
@@ -35,8 +34,8 @@
 
 **Frontend:** React (Vite, Tailwind, shadcn/ui)  
 **Backend:** FastAPI (Python)  
-**APIs:** Knot, Grok, X
-**Database:** SQL
+**APIs:** Knot, Grok, X 
+**Database:** SQL Lite
 
 ---
 
