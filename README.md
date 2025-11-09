@@ -6,7 +6,7 @@
 [![Vite](https://img.shields.io/badge/Vite-5.4-purple?logo=vite)](https://vitejs.dev)
 
 > **A crowdsourced, community-oriented loan platform** where borrowers and lenders are verified members of the *same geographic community* — using ID verification to build real trust.  
-> Lenders bid the lowest rate they’re willing to accept, borrowers pick their amount, and our algorithm stitches together multiple offers** to fund the exact need.
+> Lenders bid the lowest rate they’re willing to accept, borrowers pick their amount, and our algorithm stitches together multiple offers to fund the exact need.
 
 ---
 
