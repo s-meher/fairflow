@@ -15,20 +15,27 @@ export default function BorrowRisk() {
   const [loading, setLoading] = useState(true);
   const [declineLoading, setDeclineLoading] = useState(false);
   const [error, setError] = useState('');
+  const [grokLoading, setGrokLoading] = useState(false);
+  const [isGrokScore, setIsGrokScore] = useState(false);
 
   useEffect(() => {
     if (!user?.userId) return;
     let mounted = true;
     async function loadRisk() {
       setLoading(true);
+       setGrokLoading(true);
+       setIsGrokScore(false);
       try {
         const resp = await fetchBorrowRisk(user.userId);
         if (mounted) {
           setRisk(resp);
+          setIsGrokScore(resp.analysis_source === 'grok');
+          setGrokLoading(false);
         }
       } catch (err) {
         if (mounted) {
           setError(err.response?.data?.detail || 'Could not fetch risk.');
+          setGrokLoading(false);
         }
       } finally {
         if (mounted) setLoading(false);
@@ -55,6 +62,7 @@ export default function BorrowRisk() {
   if (!user) return null;
 
   if (loading) {
+    const LoaderIcon = grokLoading ? Sparkles : TrendingUp;
     return (
       <Card className="mx-auto max-w-2xl">
         <CardContent className="p-12 text-center">
@@ -63,9 +71,11 @@ export default function BorrowRisk() {
             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
             className="mx-auto mb-4 h-16 w-16"
           >
-            <TrendingUp className="h-full w-full text-primary" />
+            <LoaderIcon className="h-full w-full text-primary" />
           </motion.div>
-          <p className="text-lg text-muted-foreground">Analyzing your profile...</p>
+          <p className="text-lg text-muted-foreground">
+            {grokLoading ? 'Calling xAI Grok to weigh your spending patterns…' : 'Analyzing your profile...'}
+          </p>
         </CardContent>
       </Card>
     );
@@ -164,6 +174,18 @@ export default function BorrowRisk() {
               />
             </div>
           </motion.div>
+
+          {isGrokScore && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="flex items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2 text-sm text-primary"
+            >
+              <Sparkles className="h-4 w-4" />
+              Score pulled fresh from Grok using your recent transactions.
+            </motion.div>
+          )}
 
           {risk.knot_summary && (
             <motion.div

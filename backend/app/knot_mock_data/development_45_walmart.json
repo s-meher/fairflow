@@ -1,0 +1,221 @@
+{
+  "merchant": {
+    "id": 4,
+    "name": "Walmart"
+  },
+  "transactions": [
+    {
+      "id": "13da3c28-a068-4642-9ce2-b730cfda5f5f",
+      "external_id": "a9x7bq2lmw5p",
+      "datetime": "2024-11-10T00:00:00+00:00",
+      "url": "https://www.walmart.com/ip/Band-Aid-Brand-Adhesive-Bandages-Variety-Pack-Assorted-Sizes-30-Count/10315643",
+      "order_status": "COMPLETED",
+      "payment_methods": [
+        {
+          "external_id": "x7q9m2lbw5pazc",
+          "type": "CARD",
+          "brand": "VISA",
+          "last_four": "5690",
+          "name": "Ada's credit card",
+          "transaction_amount": "290.64"
+        }
+      ],
+      "price": {
+        "sub_total": "290.64",
+        "adjustments": [
+          {
+            "type": "TAX",
+            "label": "NYC local sales tax",
+            "amount": "25.75"
+          }
+        ],
+        "total": "316.39",
+        "currency": "USD"
+      },
+      "products": [
+        {
+          "external_id": "10315643",
+          "name": "Band-Aid Adhesive Bandages Variety Pack (Bulk Order)",
+          "url": "https://www.walmart.com/ip/Band-Aid-Brand-Adhesive-Bandages-Variety-Pack-Assorted-Sizes-30-Count/10315643",
+          "quantity": 77,
+          "price": {
+            "sub_total": "290.64",
+            "total": "290.64",
+            "unit_price": "3.77"
+          },
+          "eligibility": ["FSA/HSA"]
+        }
+      ]
+    },
+    {
+      "id": "ec3f7eb1-be68-468f-99b3-aa415724e9c2",
+      "external_id": "c7y1h2jbv6tn",
+      "datetime": "2025-01-15T00:00:00+00:00",
+      "url": "https://www.walmart.com/ip/Great-Value-Whole-Vitamin-D-Milk-Gallon-Plastic-Jug-128-fl-oz/10317111",
+      "order_status": "COMPLETED",
+      "payment_methods": [
+        {
+          "external_id": "c9m2q1jbv3tnaz",
+          "type": "CARD",
+          "brand": "VISA",
+          "last_four": "4912",
+          "name": "Ada's credit card",
+          "transaction_amount": "292.35"
+        }
+      ],
+      "price": {
+        "sub_total": "292.35",
+        "adjustments": [
+          {
+            "type": "TAX",
+            "label": "NYC local sales tax",
+            "amount": "24.65"
+          }
+        ],
+        "total": "317.00",
+        "currency": "USD"
+      },
+      "products": [
+        {
+          "external_id": "10317111",
+          "name": "Great Value Whole Vitamin D Milk Gallon (Case Pack)",
+          "url": "https://www.walmart.com/ip/Great-Value-Whole-Vitamin-D-Milk-Gallon-Plastic-Jug-128-fl-oz/10317111",
+          "quantity": 99,
+          "price": {
+            "sub_total": "292.35",
+            "total": "292.35",
+            "unit_price": "2.96"
+          }
+        }
+      ]
+    },
+    {
+      "id": "7c1a0b2f-8f79-43d3-bc85-f7487f53349c",
+      "external_id": "d6z4k3paxm4t",
+      "datetime": "2025-02-05T00:00:00+00:00",
+      "url": "https://www.walmart.com/ip/Great-Value-Large-White-Eggs-12-Count/114886579",
+      "order_status": "COMPLETED",
+      "payment_methods": [
+        {
+          "external_id": "v8q3r1lbk2fmxz",
+          "type": "CARD",
+          "brand": "MASTERCARD",
+          "last_four": "2372",
+          "name": "Ada's credit card",
+          "transaction_amount": "295.00"
+        }
+      ],
+      "price": {
+        "sub_total": "295.00",
+        "adjustments": [
+          {
+            "type": "TAX",
+            "label": "NYC local sales tax",
+            "amount": "22.00"
+          }
+        ],
+        "total": "317.00",
+        "currency": "USD"
+      },
+      "products": [
+        {
+          "external_id": "114886579",
+          "name": "Great Value Large White Eggs 12 Count (Bulk Cartons)",
+          "url": "https://www.walmart.com/ip/Great-Value-Large-White-Eggs-12-Count/114886579",
+          "quantity": 150,
+          "price": {
+            "sub_total": "295.00",
+            "total": "295.00",
+            "unit_price": "1.97"
+          }
+        }
+      ]
+    },
+    {
+      "id": "9836d4e4-4abd-45b2-904f-b6be2a32a2b5",
+      "external_id": "e7l2d4kmob4w",
+      "datetime": "2025-03-21T00:00:00+00:00",
+      "url": "https://www.walmart.com/ip/Equate-Ibuprofen-Pain-Reliever-Fever-Reducer-Tablets-200-mg-100-Count/13921047",
+      "order_status": "COMPLETED",
+      "payment_methods": [
+        {
+          "external_id": "l7n2h4mbq8foxw",
+          "type": "CARD",
+          "brand": "AMEX",
+          "last_four": "8021",
+          "name": "Ada's credit card",
+          "transaction_amount": "289.30"
+        }
+      ],
+      "price": {
+        "sub_total": "289.30",
+        "adjustments": [
+          {
+            "type": "TAX",
+            "label": "NYC local sales tax",
+            "amount": "27.70"
+          }
+        ],
+        "total": "317.00",
+        "currency": "USD"
+      },
+      "products": [
+        {
+          "external_id": "13921047",
+          "name": "Equate Ibuprofen 200mg 100 Count (10-Pack)",
+          "url": "https://www.walmart.com/ip/Equate-Ibuprofen-Pain-Reliever-Fever-Reducer-Tablets-200-mg-100-Count/13921047",
+          "quantity": 139,
+          "price": {
+            "sub_total": "289.30",
+            "total": "289.30",
+            "unit_price": "2.08"
+          }
+        }
+      ]
+    },
+    {
+      "id": "6543cd21-dd84-4f8f-adb8-09ef2d5c8c67",
+      "external_id": "f8t6m2nbv0yx",
+      "datetime": "2025-04-16T00:00:00+00:00",
+      "url": "https://www.walmart.com/ip/Great-Value-Fat-Free-Milk-Gallon-Plastic-Jug-128-fl-oz/10321531",
+      "order_status": "COMPLETED",
+      "payment_methods": [
+        {
+          "external_id": "p2y7m0vlb8zxxw",
+          "type": "CARD",
+          "brand": "VISA",
+          "last_four": "6721",
+          "name": "Ada's credit card",
+          "transaction_amount": "291.60"
+        }
+      ],
+      "price": {
+        "sub_total": "291.60",
+        "adjustments": [
+          {
+            "type": "TAX",
+            "label": "NYC local sales tax",
+            "amount": "25.40"
+          }
+        ],
+        "total": "317.00",
+        "currency": "USD"
+      },
+      "products": [
+        {
+          "external_id": "10321531",
+          "name": "Great Value Fat-Free Milk Gallon (Bulk Case)",
+          "url": "https://www.walmart.com/ip/Great-Value-Fat-Free-Milk-Gallon-Plastic-Jug-128-fl-oz/10321531",
+          "quantity": 99,
+          "price": {
+            "sub_total": "291.60",
+            "total": "291.60",
+            "unit_price": "2.96"
+          }
+        }
+      ]
+    }
+  ],
+  "next_cursor": "<string>",
+  "limit": 5
+}

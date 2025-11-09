@@ -273,8 +273,7 @@ export default function BorrowAmount() {
                     >
                       <p className="text-sm font-semibold text-foreground">{merchant.merchant_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Avg monthly spend ${merchant.avg_monthly_spend} · Essentials{' '}
-                        {Math.round((merchant.essentials_ratio || 0) * 100)}%
+                        Avg monthly spend ${merchant.avg_monthly_spend}
                       </p>
                     </div>
                   ))}

@@ -170,8 +170,6 @@ export default function BorrowOptions() {
                                 <div className="h-2 w-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
                                 <span className="font-semibold">{part.lenderId}:</span>
                                 <span className="font-mono">${part.amount}</span>
-                                <span className="text-xs">@</span>
-                                <span className="font-mono font-bold text-emerald-600">{part.rate}%</span>
                               </motion.li>
                             ))}
                           </ul>
@@ -257,8 +255,6 @@ export default function BorrowOptions() {
                           <div className="h-2 w-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" />
                           <span className="font-semibold">{l.id}:</span>
                           <span className="font-mono">${l.amount}</span>
-                          <span className="text-xs">@</span>
-                          <span className="font-mono font-bold text-emerald-600">{l.rate}%</span>
                         </div>
                       ))}
                     </div>

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { fetchLenderDashboard } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { FinanceBotPanel } from './FinanceBot';
 
 export default function DashboardLender() {
   const user = useRequiredUser();
@@ -91,20 +91,107 @@ export default function DashboardLender() {
       <div className="grid gap-4">
         {data ? (
           <>
-            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
-              Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
-              {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
-            </Card>
-            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
-              Expected revenue: ${data.expected_revenue_year} over the next year
-            </Card>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+                Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
+                {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
+              </Card>
+              <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+                Expected revenue: ${data.expected_revenue_year} over the next year
+              </Card>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="rounded-3xl border border-border/60 bg-white/90 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Revenue outlook</CardTitle>
+                  <CardDescription>Forecast of monthly income and reinvestment potential</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  {revenueForecast.length ? (
+                    <ChartContainer config={revenueChartConfig} className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={revenueForecast} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="fill-revenue-lender" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.5} />
+                              <stop offset="95%" stopColor="var(--color-revenue)" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="fill-reinvest-lender" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-reinvest)" stopOpacity={0.5} />
+                              <stop offset="95%" stopColor="var(--color-reinvest)" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="4 8" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                          <YAxis width={0} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+                          <Area
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="var(--color-revenue)"
+                            fill="url(#fill-revenue-lender)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="reinvest"
+                            stroke="var(--color-reinvest)"
+                            fill="url(#fill-reinvest-lender)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Projecting revenue curve…</p>
+                  )}
+                </CardContent>
+              </Card>
+              <Card className="rounded-3xl border border-border/60 bg-white/90 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Repayment pipeline</CardTitle>
+                  <CardDescription>Weekly repayments trending across active pools</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  {paymentPipeline.length ? (
+                    <ChartContainer config={pipelineChartConfig} className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={paymentPipeline} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="fill-repayments-lender" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-repayments)" stopOpacity={0.45} />
+                              <stop offset="95%" stopColor="var(--color-repayments)" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="4 8" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                          <YAxis width={0} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+                          <Area
+                            type="monotone"
+                            dataKey="repayments"
+                            stroke="var(--color-repayments)"
+                            fill="url(#fill-repayments-lender)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Mapping repayments pipeline…</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </>
         ) : (
           <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
             Gathering your lending sunshine…
           </Card>
         )}
-        <FinanceBotPanel role="lender" />
       </div>
     </div>
   );

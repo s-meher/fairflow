@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { fetchBorrowerDashboard } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { FinanceBotPanel } from './FinanceBot';
 
 export default function DashboardBorrower() {
   const user = useRequiredUser();
@@ -97,23 +97,110 @@ export default function DashboardBorrower() {
       <div className="grid gap-4">
         {data ? (
           <>
-            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
-              Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
-              {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
-            </Card>
-            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
-              Total owed: ${data.total_owed_year} over the next year
-            </Card>
-            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
-              Saved vs bank: ${data.savings_vs_bank_year}
-            </Card>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+                Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
+                {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
+              </Card>
+              <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+                Total owed: ${data.total_owed_year} over the next year
+              </Card>
+              <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+                Saved vs bank: ${data.savings_vs_bank_year}
+              </Card>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="rounded-3xl border border-border/60 bg-white/90 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Repayment glide path</CardTitle>
+                  <CardDescription>Projected weekly installments and balance decline</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  {paymentSchedule.length ? (
+                    <ChartContainer config={paymentChartConfig} className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={paymentSchedule} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="fill-payment-borrower" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-payment)" stopOpacity={0.5} />
+                              <stop offset="95%" stopColor="var(--color-payment)" stopOpacity={0.05} />
+                            </linearGradient>
+                            <linearGradient id="fill-balance-borrower" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-balance)" stopOpacity={0.5} />
+                              <stop offset="95%" stopColor="var(--color-balance)" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="4 8" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                          <YAxis width={0} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+                          <Area
+                            type="monotone"
+                            dataKey="payment"
+                            stroke="var(--color-payment)"
+                            fill="url(#fill-payment-borrower)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="balance"
+                            stroke="var(--color-balance)"
+                            fill="url(#fill-balance-borrower)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading repayment trend…</p>
+                  )}
+                </CardContent>
+              </Card>
+              <Card className="rounded-3xl border border-border/60 bg-white/90 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Savings momentum</CardTitle>
+                  <CardDescription>Compounding advantage compared to a bank loan</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  {savingsGrowth.length ? (
+                    <ChartContainer config={savingsChartConfig} className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={savingsGrowth} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="fill-savings-borrower" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-savings)" stopOpacity={0.45} />
+                              <stop offset="95%" stopColor="var(--color-savings)" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="4 8" vertical={false} />
+                          <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                          <YAxis width={0} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+                          <Area
+                            type="monotone"
+                            dataKey="savings"
+                            stroke="var(--color-savings)"
+                            fill="url(#fill-savings-borrower)"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Calculating savings impact…</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </>
         ) : (
           <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
             Loading your progress sparkle…
           </Card>
         )}
-        <FinanceBotPanel role="borrower" />
       </div>
     </div>
   );
