@@ -1,4 +1,4 @@
-# 🪸 Symbio: Fair Lending. No Sharks. 🦈🚫
+# 🌊 FairFlow: Fair Money. Real People. Honest Flow.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)  
 [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org)  
