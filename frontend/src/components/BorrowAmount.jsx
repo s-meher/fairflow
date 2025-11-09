@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { postBorrowAmount } from '../api';
+import { postBorrowAmount, linkKnotAccount, fetchKnotProfile } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
 import { setSessionValue } from '../session';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, ArrowRight, TrendingUp, Info } from 'lucide-react';
-
-const ENABLE_KNOT_LINK = false;
+import { DollarSign, ArrowRight, TrendingUp, Info, Link2, ShieldCheck } from 'lucide-react';
 
 const quickAmounts = [500, 1000, 2000, 5000];
+const merchantOptions = [
+  { id: 45, name: 'Walmart', blurb: 'Groceries & essentials' },
+  { id: 19, name: 'DoorDash', blurb: 'Food & delivery patterns' },
+];
 
 export default function BorrowAmount() {
   const navigate = useNavigate();
@@ -19,6 +21,37 @@ export default function BorrowAmount() {
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [knotProfile, setKnotProfile] = useState(null);
+  const [knotError, setKnotError] = useState('');
+  const [linkingMerchant, setLinkingMerchant] = useState(null);
+  const [knotLoading, setKnotLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.userId) return;
+    let cancelled = false;
+    async function loadProfile() {
+      setKnotLoading(true);
+      try {
+        const profile = await fetchKnotProfile(user.userId);
+        if (!cancelled) {
+          setKnotProfile(profile);
+          setKnotError('');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setKnotError(err.response?.data?.detail || 'Could not load linked purchases.');
+        }
+      } finally {
+        if (!cancelled) setKnotLoading(false);
+      }
+    }
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.userId]);
+
+  const hasLinkedMerchants = knotProfile?.merchants?.length > 0;
 
   async function handleNext(e) {
     e.preventDefault();
@@ -37,6 +70,21 @@ export default function BorrowAmount() {
       setError(err.response?.data?.detail || 'Could not save amount.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleLink(merchantId) {
+    if (!user?.userId) return;
+    setLinkingMerchant(merchantId);
+    setKnotError('');
+    try {
+      await linkKnotAccount({ user_id: user.userId, merchant_id: merchantId });
+      const profile = await fetchKnotProfile(user.userId);
+      setKnotProfile(profile);
+    } catch (err) {
+      setKnotError(err.response?.data?.detail || 'Could not link purchase history.');
+    } finally {
+      setLinkingMerchant(null);
     }
   }
 
@@ -168,19 +216,75 @@ export default function BorrowAmount() {
             </AnimatePresence>
           </motion.div>
 
-          {/* Knot integration placeholder */}
-          {ENABLE_KNOT_LINK && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-              className="rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 p-6 text-center"
-            >
-              <p className="text-base text-muted-foreground">
-                🔗 Link your Knot account for faster verification (coming soon)
-              </p>
-            </motion.div>
-          )}
+          {/* Knot opt-in */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="rounded-3xl border-2 border-emerald-200/70 bg-emerald-50/70 p-6"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="h-10 w-10 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="text-lg font-semibold text-foreground">Opt in to smarter risk analysis</p>
+                  <p className="text-sm text-muted-foreground">
+                    Share purchase history from a partner like Walmart or DoorDash so we can run xAI Grok on real spending before showing your clarity score.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {merchantOptions.map((merchant) => (
+                  <motion.button
+                    key={merchant.id}
+                    type="button"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => handleLink(merchant.id)}
+                    disabled={!!linkingMerchant}
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition text-left ${
+                      hasLinkedMerchants && knotProfile.merchants.some((m) => m.merchant_id === merchant.id)
+                        ? 'border-emerald-500 bg-white text-emerald-700 shadow-sm'
+                        : 'border-emerald-200 bg-white/70 text-emerald-600 hover:border-emerald-400'
+                    }`}
+                  >
+                    <Link2 className="h-4 w-4" />
+                    <span className="flex flex-col leading-tight">
+                      {linkingMerchant === merchant.id ? 'Linking…' : `Link ${merchant.name}`}
+                      <span className="text-[11px] font-normal text-muted-foreground">{merchant.blurb}</span>
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+            {knotError && (
+              <p className="mt-4 text-sm text-red-600">{knotError}</p>
+            )}
+            {hasLinkedMerchants && (
+              <div className="mt-6 rounded-2xl bg-white/70 p-4 shadow-inner">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  Currently sharing
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {knotProfile.merchants.map((merchant) => (
+                    <div
+                      key={merchant.merchant_id}
+                      className="rounded-xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50 p-4"
+                    >
+                      <p className="text-sm font-semibold text-foreground">{merchant.merchant_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Avg monthly spend ${merchant.avg_monthly_spend} · Essentials{' '}
+                        {Math.round((merchant.essentials_ratio || 0) * 100)}%
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Grok will only use this opt-in data to score your request. You can unlink any time by reloading without sharing.
+                </p>
+              </div>
+            )}
+          </motion.div>
 
           {/* Info note */}
           <motion.div
@@ -191,7 +295,7 @@ export default function BorrowAmount() {
           >
             <Info className="h-6 w-6 text-blue-600 flex-shrink-0 mt-1" />
             <p className="text-sm text-muted-foreground leading-relaxed">
-              <strong className="text-foreground">Community tip:</strong> Requesting amounts that align with your capacity increases approval likelihood. We'll show you your clarity score next.
+              <strong className="text-foreground">Community tip:</strong> Requesting amounts that align with your capacity increases approval likelihood. Opting in with one of the purchase sources above lets Grok run a deeper risk check before we show your clarity score.
             </p>
           </motion.div>
 

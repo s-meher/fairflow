@@ -12,10 +12,11 @@ import LenderSetup from './components/LenderSetup';
 import DashboardHome from './components/DashboardHome';
 import DashboardBorrower from './components/DashboardBorrower';
 import DashboardLender from './components/DashboardLender';
+import { FloatingFinanceBot } from './components/FinanceBot';
 
 export default function App() {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center px-4 py-10 md:py-16">
+    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-10 md:py-16">
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/scan-id" element={<ScanID />} />
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/dashboard/lender" element={<DashboardLender />} />
         <Route path="*" element={<Landing />} />
       </Routes>
+      <FloatingFinanceBot />
     </div>
   );
 }

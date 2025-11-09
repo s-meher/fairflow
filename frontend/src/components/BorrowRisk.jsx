@@ -5,7 +5,7 @@ import { useRequiredUser } from '../hooks/useRequiredUser';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { motion } from 'framer-motion';
-import { TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { TrendingUp, AlertCircle, CheckCircle, ShoppingBag, Sparkles } from 'lucide-react';
 
 export default function BorrowRisk() {
   const user = useRequiredUser();
@@ -110,7 +110,16 @@ export default function BorrowRisk() {
             </motion.div>
             Water Check
           </CardTitle>
-          <p className="text-base text-muted-foreground leading-relaxed">{risk.explanation}</p>
+          <div className="mt-2 flex flex-col gap-2">
+            <p className="text-base text-muted-foreground leading-relaxed">{risk.explanation}</p>
+            {risk.analysis_source === 'grok' && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+                <Sparkles className="h-3 w-3" />
+                xAI Grok analysis
+                {risk.analysis_model && <span className="text-[10px] text-primary/80">{risk.analysis_model}</span>}
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-8">
           {/* Score Display */}
@@ -122,7 +131,7 @@ export default function BorrowRisk() {
           >
             <div className="text-center">
               <p className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                Clarity Score
+                {risk.analysis_source === 'grok' ? 'Grok clarity score' : 'Clarity score'}
               </p>
               <motion.div
                 className={`mx-auto inline-flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br ${getScoreColor(risk.score)} text-white shadow-2xl`}
@@ -155,6 +164,44 @@ export default function BorrowRisk() {
               />
             </div>
           </motion.div>
+
+          {risk.knot_summary && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5"
+            >
+              <div className="flex items-start gap-3">
+                <ShoppingBag className="h-8 w-8 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Linked spending</p>
+                  <p className="text-base text-foreground">
+                    {risk.knot_summary.merchants.join(', ')} · last sync{' '}
+                    {risk.knot_summary.last_sync
+                      ? new Date(risk.knot_summary.last_sync).toLocaleString()
+                      : 'moments ago'}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3 text-center">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Avg monthly spend</p>
+                  <p className="text-xl font-bold text-primary">${risk.knot_summary.avg_monthly_spend}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Orders analyzed</p>
+                  <p className="text-xl font-bold text-primary">{risk.knot_summary.orders}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Essentials share</p>
+                  <p className="text-xl font-bold text-primary">
+                    {Math.round((risk.knot_summary.essentials_ratio || 0) * 100)}%
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Recommendation */}
           <motion.div

@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis } from 'recharts';
+import { FinanceBotPanel } from './FinanceBot';
 
 export default function DashboardLender() {
   const user = useRequiredUser();
@@ -88,117 +88,24 @@ export default function DashboardLender() {
       </Tabs>
 
       {error && <p className="text-destructive">{error}</p>}
-      {data && (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Next repayment</CardTitle>
-                <CardDescription>{data.next_payment.due_in_weeks} week(s) away</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">${data.next_payment.amount}</p>
-              </CardContent>
+      <div className="grid gap-4">
+        {data ? (
+          <>
+            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+              Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
+              {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Annual revenue</CardTitle>
-                <CardDescription>Projected repayments this year</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">${data.expected_revenue_year}</p>
-              </CardContent>
+            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+              Expected revenue: ${data.expected_revenue_year} over the next year
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Average yield</CardTitle>
-                <CardDescription>Based on your repayments pipeline</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">
-                  {Math.min(
-                    18,
-                    Math.max(6, Math.round((data.expected_revenue_year / Math.max(data.next_payment.amount, 1)) * 2)),
-                  )}
-                  %
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Active borrowers</CardTitle>
-                <CardDescription>Community members in your portfolio</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">{Math.max(3, Math.round(data.expected_revenue_year / 800))}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle>Revenue projections</CardTitle>
-                <CardDescription>Set aside a portion to reinvest in new borrowers</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <ChartContainer config={revenueChartConfig} className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={revenueForecast}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} />
-                      <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                      <Area
-                        type="monotone"
-                        dataKey="revenue"
-                        stroke="var(--color-revenue)"
-                        fill="var(--color-revenue)"
-                        fillOpacity={0.2}
-                        name={revenueChartConfig.revenue.label}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="reinvest"
-                        stroke="var(--color-reinvest)"
-                        fill="var(--color-reinvest)"
-                        fillOpacity={0.1}
-                        name={revenueChartConfig.reinvest.label}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle>Repayment pipeline</CardTitle>
-                <CardDescription>Expected weekly inflows from your borrowers</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <ChartContainer config={pipelineChartConfig} className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={paymentPipeline}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} />
-                      <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                      <Area
-                        type="monotone"
-                        dataKey="repayments"
-                        stroke="var(--color-repayments)"
-                        fill="var(--color-repayments)"
-                        fillOpacity={0.2}
-                        name={pipelineChartConfig.repayments.label}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-        </>
-      )}
+          </>
+        ) : (
+          <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+            Gathering your lending sunshine…
+          </Card>
+        )}
+        <FinanceBotPanel role="lender" />
+      </div>
     </div>
   );
 }

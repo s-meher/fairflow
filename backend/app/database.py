@@ -64,6 +64,12 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 reviewed_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS knot_profiles (
+                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                merchants_json TEXT NOT NULL,
+                transactions_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
         _ensure_user_columns(conn)

@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis } from 'recharts';
+import { FinanceBotPanel } from './FinanceBot';
 
 export default function DashboardBorrower() {
   const user = useRequiredUser();
@@ -94,117 +94,27 @@ export default function DashboardBorrower() {
       </Tabs>
 
       {error && <p className="text-destructive">{error}</p>}
-      {data && (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Next payment</CardTitle>
-                <CardDescription>{data.next_payment.due_in_weeks} week(s) away</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">${data.next_payment.amount}</p>
-              </CardContent>
+      <div className="grid gap-4">
+        {data ? (
+          <>
+            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+              Next payment: ${data.next_payment.amount} in {data.next_payment.due_in_weeks}{' '}
+              {data.next_payment.due_in_weeks === 1 ? 'week' : 'weeks'}
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Total owed</CardTitle>
-                <CardDescription>Over the next 12 months</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">${data.total_owed_year}</p>
-              </CardContent>
+            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+              Total owed: ${data.total_owed_year} over the next year
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Savings vs bank</CardTitle>
-                <CardDescription>Estimated annual savings</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">${data.savings_vs_bank_year}</p>
-              </CardContent>
+            <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+              Saved vs bank: ${data.savings_vs_bank_year}
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Repayment progress</CardTitle>
-                <CardDescription>First payment covers about</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">
-                  {Math.min(
-                    100,
-                    Math.round((data.next_payment.amount / Math.max(data.total_owed_year, 1)) * 100),
-                  )}
-                  %
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle>Payment outlook</CardTitle>
-                <CardDescription>Projected weekly payments and remaining balance</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <ChartContainer config={paymentChartConfig} className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={paymentSchedule}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} />
-                      <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                      <Area
-                        type="monotone"
-                        dataKey="payment"
-                        stroke="var(--color-payment)"
-                        fill="var(--color-payment)"
-                        fillOpacity={0.2}
-                        name={paymentChartConfig.payment.label}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="balance"
-                        stroke="var(--color-balance)"
-                        fill="var(--color-balance)"
-                        fillOpacity={0.1}
-                        name={paymentChartConfig.balance.label}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="flex flex-col">
-              <CardHeader className="pb-2">
-                <CardTitle>Savings growth</CardTitle>
-                <CardDescription>Comparison against traditional banking fees</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <ChartContainer config={savingsChartConfig} className="h-[280px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={savingsGrowth}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} />
-                      <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
-                      <Area
-                        type="monotone"
-                        dataKey="savings"
-                        stroke="var(--color-savings)"
-                        fill="var(--color-savings)"
-                        fillOpacity={0.2}
-                        name={savingsChartConfig.savings.label}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-        </>
-      )}
+          </>
+        ) : (
+          <Card className="rounded-3xl border-2 border-dashed border-border bg-white/80 p-6 text-lg font-semibold">
+            Loading your progress sparkle…
+          </Card>
+        )}
+        <FinanceBotPanel role="borrower" />
+      </div>
     </div>
   );
 }
