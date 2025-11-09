@@ -63,6 +63,7 @@ cp .env.example .env
 KNOT_API_KEY=
 GROK_API_KEY=
 X_API_KEY=
+GEMINI_API_KEY=
 BANK_AVG_RATE=9.5
 ```
 
