@@ -94,7 +94,7 @@ export default function Landing() {
               className="mb-6 text-7xl md:text-8xl font-black tracking-tight"
             >
               <span className="bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 bg-clip-text text-transparent drop-shadow-sm">
-                Symbio
+                FairFlow
               </span>
             </motion.h1>
           </motion.div>
@@ -199,7 +199,7 @@ export default function Landing() {
         >
           <div className="mb-16 text-center">
             <h2 className="mb-4 text-4xl md:text-5xl font-black text-primary">
-              Why Symbio Works
+              Why FairFlow Works
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
               Built for real people, powered by community trust

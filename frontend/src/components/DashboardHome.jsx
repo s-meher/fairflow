@@ -41,7 +41,7 @@ export default function DashboardHome() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Symbio control center</h1>
+          <h1 className="text-3xl font-bold">FairFlow control center</h1>
           <p className="text-muted-foreground">
             Quickly move between lending and borrowing tools without losing your place.
           </p>

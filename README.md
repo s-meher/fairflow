@@ -1,4 +1,4 @@
-# 🪸 Symbio: Fair Lending. No Sharks. 🦈🚫
+# 🪸 FairFlow: Fair Lending. No Sharks. 🦈🚫
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)  
 [![React](https://img.shields.io/badge/React-18-blue?logo=react)](https://reactjs.org)  
@@ -10,9 +10,9 @@
 
 ---
 
-## 💡 Why Symbio Is a Game Changer
+## 💡 Why FairFlow Is a Game Changer
 
-| Problem | Symbio’s Solution |
+| Problem | FairFlow’s Solution |
 |----------|------------------|
 | **Predatory fintechs (Klarna, Afterpay)** prey on low-income users with 30%+ APRs | **Hard cap at average bank rate (9.5%)** — no loan can exceed this |
 | **Opaque P2P lending** with hidden fees and high risk | **Full transparency**: every rate, fee, and match is visible |
@@ -43,8 +43,8 @@
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/yourusername/symbio.git
-cd symbio
+git clone https://github.com/yourusername/fairflow.git
+cd fairflow
 ````
 
 ### 2. Environment Setup

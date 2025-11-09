@@ -238,9 +238,9 @@ def _share_loan_on_x(user_id: str, amount: float, lenders: List[Dict]) -> Tuple[
     suffix = user_id.split("_")[-1][:4]
     lender_count = len(lenders)
     text = (
-        f"Symbio update: Princeton is saving together 💚\n"
+        f"FairFlow update: Princeton is saving together 💚\n"
         f"A neighbor just borrowed ${amount:,.0f} for educational expenses "
-        f"from {lender_count} local supporter(s). #BorrowLocal #Symbio"
+        f"from {lender_count} local supporter(s). #BorrowLocal #FairFlow"
     )
     auth = OAuth1(
         X_CONSUMER_KEY,
@@ -609,7 +609,7 @@ def _fallback_finance_reply(prompt: str, history: List[FinanceBotMessage]) -> st
 
     if any(word in prompt_lower for word in ("loan", "apply", "approval", "qualify")):
         return (
-            "To move toward a Symbio loan, lock in your ID, keep essentials spending above 65%, "
+            "To move toward a FairFlow loan, lock in your ID, keep essentials spending above 65%, "
             "and size the request so weekly payments stay under 10% of your take-home pay."
             + base_close
         )
@@ -618,7 +618,7 @@ def _fallback_finance_reply(prompt: str, history: List[FinanceBotMessage]) -> st
         return (
             "Start a three-step savings plan: 1) earmark a fixed amount right after payday, "
             "2) move one discretionary purchase each week into an essentials bucket, "
-            "3) snapshot balances every Sunday so Symbio sees a steady cushion."
+            "3) snapshot balances every Sunday so FairFlow sees a steady cushion."
             + base_close
         )
 

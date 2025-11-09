@@ -186,7 +186,7 @@ index 0963b15..fe5ed58 100644
      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 -    <title>SumbiD / LendLocal</title>
-+    <title>Symbio</title>
++    <title>FairFlow</title>
    </head>
    <body>
      <div id="root"></div>

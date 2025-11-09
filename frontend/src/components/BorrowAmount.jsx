@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, ArrowRight, TrendingUp, Info, Link2, ShieldCheck } from 'lucide-react';
 import FlowProgress from './FlowProgress';
 import { BORROWER_FLOW_STEPS } from '../lib/flowSteps';
+import KnotLogo from '../../KnotLogo.png';
 
 const quickAmounts = [250, 500, 1000, 2000];
 const merchantOptions = [
@@ -239,14 +240,21 @@ export default function BorrowAmount() {
             className="rounded-3xl border-2 border-emerald-200/70 bg-emerald-50/70 p-6"
           >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="h-10 w-10 text-emerald-600 flex-shrink-0" />
-                <div>
-                  <p className="text-lg font-semibold text-foreground">Opt in to smarter risk analysis</p>
-                  <p className="text-sm text-muted-foreground">
-                    Share purchase history from a partner like Walmart or DoorDash so we can run xAI Grok on real spending before showing your clarity score.
-                  </p>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="h-10 w-10 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-lg font-semibold text-foreground">Opt in to smarter risk analysis</p>
+                    <p className="text-sm text-muted-foreground">
+                      Share purchase history from a partner like Walmart or DoorDash so we can run xAI Grok on real spending before showing your clarity score. We securely connect through the Knot API, so you stay in control while sharing only what&apos;s needed.
+                    </p>
+                  </div>
                 </div>
+                <img
+                  src={KnotLogo}
+                  alt="Knot logo"
+                  className="h-20 w-auto self-start rounded-lg bg-white/80 px-4 py-3 shadow-sm ring-1 ring-emerald-100 lg:h-28"
+                />
               </div>
               <div className="flex flex-wrap gap-3">
                 {merchantOptions.map((merchant) => (

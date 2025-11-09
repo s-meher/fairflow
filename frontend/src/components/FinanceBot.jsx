@@ -184,7 +184,7 @@ export function FinanceBotPanel({ role = 'borrower' }) {
 
 export function FloatingFinanceBot() {
   const intro =
-    'Hello, I am Symbio’s finance bot. Tap the bubble whenever you need borrowing or lending guidance.';
+    'Hello, I am FairFlow’s finance bot. Tap the bubble whenever you need borrowing or lending guidance.';
   const { messages, input, setInput, isThinking, sendMessage } = useFinanceBotChat(intro);
   const [isOpen, setIsOpen] = useState(false);
 
