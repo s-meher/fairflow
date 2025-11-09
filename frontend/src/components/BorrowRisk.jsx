@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { motion } from 'framer-motion';
 import { TrendingUp, AlertCircle, CheckCircle, ShoppingBag, Sparkles } from 'lucide-react';
+import FlowProgress from './FlowProgress';
+import { BORROWER_FLOW_STEPS } from '../lib/flowSteps';
 
 export default function BorrowRisk() {
   const user = useRequiredUser();
@@ -159,6 +161,7 @@ export default function BorrowRisk() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
+      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="risk" label="Borrower journey" />
       <Card className="mx-auto max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">

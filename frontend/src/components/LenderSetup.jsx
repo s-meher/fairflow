@@ -8,6 +8,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { motion } from 'framer-motion';
 import { Users, TrendingUp, ArrowRight, Sparkles, DollarSign, Percent } from 'lucide-react';
+import FlowProgress from './FlowProgress';
+import { LENDER_FLOW_STEPS } from '../lib/flowSteps';
 
 const capitalSuggestions = [1000, 2500, 5000, 10000];
 const rateSuggestions = [2, 3, 4, 5];
@@ -59,6 +61,12 @@ export default function LenderSetup() {
       transition={{ duration: 0.5 }}
       className="mx-auto w-full max-w-4xl"
     >
+      <FlowProgress
+        steps={LENDER_FLOW_STEPS}
+        activeStep="setup"
+        label="Lender journey"
+        accent="from-purple-500 via-pink-500 to-rose-500"
+      />
       <Card className="relative overflow-visible">
         {/* Floating decorations */}
         <motion.div

@@ -9,6 +9,8 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { motion } from 'framer-motion';
 import { MessageSquare, ArrowRight, Sparkles, Heart } from 'lucide-react';
+import FlowProgress from './FlowProgress';
+import { BORROWER_FLOW_STEPS } from '../lib/flowSteps';
 
 const suggestions = [
   { icon: '🏠', text: 'Home improvement', value: 'home improvement' },
@@ -79,6 +81,7 @@ export default function BorrowReason() {
       transition={{ duration: 0.5 }}
       className="mx-auto w-full max-w-4xl"
     >
+      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="reason" label="Borrower journey" />
       <Card className="relative overflow-visible">
         {/* Floating decorations */}
         <motion.div

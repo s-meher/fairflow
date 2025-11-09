@@ -8,6 +8,8 @@ import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Waves, Users, Check, ArrowRight, Share2, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
+import FlowProgress from './FlowProgress';
+import { BORROWER_FLOW_STEPS } from '../lib/flowSteps';
 
 export default function BorrowOptions() {
   const user = useRequiredUser();
@@ -97,8 +99,10 @@ export default function BorrowOptions() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
+      className="mx-auto w-full max-w-4xl"
     >
-      <Card className="mx-auto max-w-4xl">
+      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="options" label="Borrower journey" />
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
             <Users className="h-8 w-8 text-primary" />
