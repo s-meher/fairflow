@@ -19,6 +19,13 @@ export default function BorrowRisk() {
   const [error, setError] = useState('');
   const [grokLoading, setGrokLoading] = useState(false);
   const [isGrokScore, setIsGrokScore] = useState(false);
+  const handleProgressSelect = useCallback(
+    (nextStep) => {
+      if (!nextStep?.path) return;
+      navigate(nextStep.path);
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     if (!user?.userId) return;
@@ -161,7 +168,12 @@ export default function BorrowRisk() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="risk" label="Borrower journey" />
+      <FlowProgress
+        steps={BORROWER_FLOW_STEPS}
+        activeStep="risk"
+        label="Borrower journey"
+        onStepSelect={handleProgressSelect}
+      />
       <Card className="mx-auto max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createUser, postBorrowReason } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
@@ -27,6 +27,13 @@ export default function BorrowReason() {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const handleProgressSelect = useCallback(
+    (nextStep) => {
+      if (!nextStep?.path) return;
+      navigate(nextStep.path);
+    },
+    [navigate],
+  );
 
   async function handleNext(e) {
     e.preventDefault();
@@ -81,7 +88,12 @@ export default function BorrowReason() {
       transition={{ duration: 0.5 }}
       className="mx-auto w-full max-w-4xl"
     >
-      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="reason" label="Borrower journey" />
+      <FlowProgress
+        steps={BORROWER_FLOW_STEPS}
+        activeStep="reason"
+        label="Borrower journey"
+        onStepSelect={handleProgressSelect}
+      />
       <Card className="relative overflow-visible">
         {/* Floating decorations */}
         <motion.div

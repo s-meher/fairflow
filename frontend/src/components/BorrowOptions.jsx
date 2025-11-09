@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchBorrowOptions, requestLoan, transferNessie } from '../api';
 import { useRequiredUser } from '../hooks/useRequiredUser';
@@ -21,6 +21,13 @@ export default function BorrowOptions() {
   const [match, setMatch] = useState(null);
   const [transferMsg, setTransferMsg] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const handleProgressSelect = useCallback(
+    (nextStep) => {
+      if (!nextStep?.path) return;
+      navigate(nextStep.path);
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     if (!user?.userId) return;
@@ -101,7 +108,12 @@ export default function BorrowOptions() {
       transition={{ duration: 0.5 }}
       className="mx-auto w-full max-w-4xl"
     >
-      <FlowProgress steps={BORROWER_FLOW_STEPS} activeStep="options" label="Borrower journey" />
+      <FlowProgress
+        steps={BORROWER_FLOW_STEPS}
+        activeStep="options"
+        label="Borrower journey"
+        onStepSelect={handleProgressSelect}
+      />
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">

@@ -5,6 +5,7 @@ export default function FlowProgress({
   activeStep,
   label = 'Journey progress',
   accent = 'from-sky-500 via-blue-500 to-indigo-500',
+  onStepSelect,
 }) {
   if (!steps?.length) return null;
   const activeIndex = Math.max(
@@ -13,6 +14,13 @@ export default function FlowProgress({
   );
   const totalSegments = Math.max(steps.length - 1, 1);
   const progressPercent = Math.min(100, Math.max(0, (activeIndex / totalSegments) * 100));
+  const canSelectSteps = typeof onStepSelect === 'function';
+
+  function handleStepSelect(step, index) {
+    if (!canSelectSteps) return;
+    if (index > activeIndex) return;
+    onStepSelect(step, index);
+  }
 
   return (
     <div className="mb-8">
@@ -28,14 +36,21 @@ export default function FlowProgress({
           className={`absolute left-0 top-0 h-1.5 rounded-full bg-gradient-to-r ${accent} transition-all`}
           style={{ width: `${progressPercent}%` }}
         />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-between">
+        <div className="absolute inset-0 flex items-center justify-between">
           {steps.map((step, index) => {
             const status =
               index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'upcoming';
+            const isSelectable = canSelectSteps && index <= activeIndex;
             return (
-              <div
+              <button
                 key={step.id}
-                className="flex flex-col items-center text-center"
+                type="button"
+                onClick={isSelectable ? () => handleStepSelect(step, index) : undefined}
+                disabled={!isSelectable}
+                className={`pointer-events-auto flex flex-col items-center rounded-full border-none bg-transparent p-0 text-center focus:outline-none disabled:cursor-default disabled:opacity-100 ${
+                  isSelectable ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white' : 'cursor-default'
+                }`}
+                aria-label={`${step.label} step`}
                 aria-current={status === 'active'}
               >
                 <div
@@ -49,7 +64,7 @@ export default function FlowProgress({
                 >
                   {status === 'done' ? <Check className="h-4 w-4" /> : index + 1}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
