@@ -83,15 +83,15 @@ function useFinanceBotChat(intro) {
 function MessageBubbles({ messages, isThinking, compact = false }) {
   return (
     <div
-      className={`space-y-3 ${compact ? 'h-44' : 'h-56'} overflow-y-auto rounded-2xl bg-white/75 p-4 text-sm backdrop-blur-sm`}
+      className={`space-y-3 ${compact ? 'h-48' : 'h-64'} overflow-y-auto rounded-3xl bg-gradient-to-b from-sky-50/80 via-white to-white/80 p-4 text-sm shadow-inner shadow-sky-100 backdrop-blur`}
     >
       {messages.map((message) => (
         <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
           <div
-            className={`max-w-[85%] rounded-2xl px-4 py-2 shadow-sm ${
+            className={`max-w-[85%] rounded-3xl px-4 py-2 shadow-sm ${
               message.sender === 'user'
-                ? 'rounded-br-md bg-gradient-to-br from-violet-500 to-pink-500 text-white'
-                : 'rounded-bl-md border border-pink-100 bg-pink-50/80 text-pink-900'
+                ? 'rounded-br-xl bg-gradient-to-r from-sky-500 to-indigo-500 text-white'
+                : 'rounded-bl-xl border border-sky-100 bg-white/80 text-sky-900'
             }`}
           >
             {message.text}
@@ -99,9 +99,9 @@ function MessageBubbles({ messages, isThinking, compact = false }) {
         </div>
       ))}
       {isThinking && (
-        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-pink-200 bg-pink-50/60 px-4 py-2 text-pink-700">
-          <Sparkles className="h-4 w-4 animate-spin text-pink-400" />
-          Dreaming up a reply…
+        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-sky-200 bg-sky-50/70 px-4 py-2 text-sky-700">
+          <Sparkles className="h-4 w-4 animate-bounce text-sky-400" />
+          Crafting a reply…
         </div>
       )}
     </div>
@@ -119,14 +119,14 @@ export function FinanceBotPanel({ role = 'borrower' }) {
   const { messages, input, setInput, isThinking, sendMessage } = useFinanceBotChat(intro);
 
   return (
-    <Card className="rounded-3xl border-none bg-gradient-to-br from-pink-50 via-rose-50 to-violet-50 shadow-lg ring-1 ring-pink-100/70">
+    <Card className="rounded-3xl border-none bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50 shadow-lg ring-1 ring-sky-100/70">
       <CardHeader className="flex flex-row items-center gap-3 pb-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl shadow-inner">
           {BOT_AVATAR}
         </div>
         <div>
-          <CardTitle className="text-xl text-pink-900">Finance Bot</CardTitle>
-          <p className="text-sm text-pink-600">Friendly nudges for your plan</p>
+          <CardTitle className="text-xl text-sky-900">Finance Bot</CardTitle>
+          <p className="text-sm text-sky-600">Friendly nudges for your plan</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -138,7 +138,7 @@ export function FinanceBotPanel({ role = 'borrower' }) {
               type="button"
               variant="ghost"
               size="sm"
-              className="rounded-full border border-pink-100 bg-white/80 text-pink-700 hover:bg-pink-100/70"
+              className="rounded-full border border-sky-100 bg-white/80 text-sky-700 hover:bg-sky-100/70"
               onClick={() => sendMessage(prompt)}
               disabled={isThinking}
             >
@@ -157,12 +157,12 @@ export function FinanceBotPanel({ role = 'borrower' }) {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Ask Finance Bot anything…"
-            className="border-pink-100 bg-white/80"
+            className="border-sky-100 bg-white/80"
             disabled={isThinking}
           />
           <Button
             type="submit"
-            className="shrink-0 bg-gradient-to-br from-violet-500 to-pink-500 text-white hover:from-violet-400 hover:to-pink-400"
+            className="shrink-0 bg-gradient-to-br from-sky-500 to-indigo-500 text-white hover:brightness-110"
             disabled={!input.trim() || isThinking}
           >
             Send
@@ -175,9 +175,12 @@ export function FinanceBotPanel({ role = 'borrower' }) {
 
 export function FloatingFinanceBot() {
   const intro =
-    'Hi! I am Mini Finance Bot. Tap a bubble whenever you want a sparkly budget boost 💕';
+    'Hello, I am Symbio’s finance bot. Tap the bubble whenever you need borrowing or lending guidance.';
   const { messages, input, setInput, isThinking, sendMessage } = useFinanceBotChat(intro);
   const [isOpen, setIsOpen] = useState(false);
+
+  const waveBackground =
+    'radial-gradient(circle at 10% 20%, rgba(186,230,253,0.8), transparent 50%), radial-gradient(circle at 80% 0%, rgba(191,219,254,0.7), transparent 55%), linear-gradient(140deg, #e0f2ff 0%, #eff6ff 45%, #ffffff 100%)';
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
@@ -188,17 +191,20 @@ export function FloatingFinanceBot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="pointer-events-auto w-72 rounded-3xl border border-pink-100 bg-white/95 p-4 shadow-2xl shadow-pink-200/70 backdrop-blur"
+            className="pointer-events-auto w-80 rounded-[32px] border border-sky-100/70 p-5 shadow-2xl shadow-sky-200/70 backdrop-blur"
+            style={{ backgroundImage: waveBackground }}
           >
-            <div className="mb-3 flex items-center justify-between text-pink-700">
-              <div className="flex items-center gap-2 font-semibold">
-                <Bot className="h-5 w-5" />
-                Mini Finance Bot
+            <div className="mb-3 flex items-center justify-between text-sky-700">
+              <div className="flex items-center gap-3 font-semibold">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 shadow-inner shadow-sky-100">
+                  <Bot className="h-5 w-5 text-sky-500" />
+                </div>
+                Blue Wave Bot
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-full bg-pink-50 p-1 text-pink-400 transition hover:bg-pink-100 hover:text-pink-600"
+                className="rounded-full bg-white/60 p-1 text-sky-400 transition hover:bg-sky-50 hover:text-sky-600"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -214,14 +220,14 @@ export function FloatingFinanceBot() {
               <Input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder="Hi Finance Bot…"
-                className="h-10 border-pink-100 text-xs"
+                placeholder="Ask Blue Wave anything…"
+                className="h-11 border-sky-100 bg-white/70 text-xs text-sky-900 placeholder:text-sky-400"
                 disabled={isThinking}
               />
               <Button
                 type="submit"
                 size="sm"
-                className="h-10 shrink-0 rounded-full bg-pink-500 px-3 text-xs text-white hover:bg-pink-400"
+                className="h-11 shrink-0 rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-4 text-xs font-semibold text-white shadow-lg shadow-sky-300/50 hover:brightness-110"
                 disabled={!input.trim() || isThinking}
               >
                 Send
@@ -233,14 +239,14 @@ export function FloatingFinanceBot() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-violet-500 text-white shadow-lg shadow-pink-400/40 transition hover:scale-105 hover:shadow-pink-400/60"
+        className="pointer-events-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-400/50 transition hover:scale-105 hover:shadow-blue-500/60"
       >
-        <span className="text-3xl">{isOpen ? '💖' : '🪙'}</span>
-        <span className="sr-only">Toggle Finance Bot</span>
+        <span className="text-3xl">{isOpen ? '💬' : '🌊'}</span>
+        <span className="sr-only">Toggle Blue Wave Bot</span>
       </button>
       {!isOpen && (
-        <div className="pointer-events-none rounded-full bg-white/80 px-4 py-1 text-xs font-semibold text-pink-600 shadow">
-          Chat with Finance Bot?
+        <div className="pointer-events-none rounded-full bg-white/80 px-4 py-1 text-xs font-semibold text-sky-600 shadow">
+          Chat with Blue Wave Bot?
         </div>
       )}
     </div>

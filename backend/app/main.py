@@ -36,16 +36,24 @@ GROK_MODEL = os.getenv("GROK_MODEL", "grok-4-mini")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai")
 NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-FINANCE_BOT_MODEL = os.getenv("FINANCE_BOT_MODEL", "gpt-4o-mini")
-FINANCE_BOT_URL = os.getenv("FINANCE_BOT_API_URL", "https://api.openai.com/v1/chat/completions")
+GEMINI_API_KEY = (
+    os.getenv("GEMINI_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("GOOGLE-API-KEY")
+)
+FINANCE_BOT_MODEL = os.getenv("FINANCE_BOT_MODEL", "gemini-2.5-flash")
+FINANCE_BOT_URL = os.getenv(
+    "FINANCE_BOT_API_URL",
+    "https://generativelanguage.googleapis.com/v1beta/models",
+)
 FINANCE_BOT_HISTORY_LIMIT = int(os.getenv("FINANCE_BOT_HISTORY_LIMIT", "8"))
 FINANCE_BOT_PROMPT = os.getenv(
     "FINANCE_BOT_SYSTEM_PROMPT",
     "You are Finance Bot, a cheerful AI that ONLY answers questions about personal finance, "
     "lending, credit, savings, budgeting, or financial literacy. "
     'If a user asks anything outside finance, reply: "I’m Finance Bot and only trained for money matters, sorry!" '
-    "Use friendly, encouraging language and keep answers under 150 words.",
+    "Use friendly, encouraging language and keep answers under 150 words."
+    "Do not use any markdown styling.",
 )
 BANK_AVG_RATE = float(os.getenv("BANK_AVG_RATE", "9.5"))
 COMMUNITY_PRECISION_DEGREES = float(os.getenv("COMMUNITY_PRECISION_DEGREES", "0.05"))
@@ -952,37 +960,39 @@ def lender_dashboard(user_id: str):
 
 @app.post("/finance-bot", response_model=FinanceBotResponse)
 async def finance_bot(payload: FinanceBotRequest):
-    if not OPENAI_API_KEY:
+    if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Finance Bot is offline right now.")
     prompt = payload.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=422, detail="Prompt is required.")
 
     trimmed_history = payload.history[-FINANCE_BOT_HISTORY_LIMIT :]
-    chat_messages: List[Dict[str, str]] = [{"role": "system", "content": FINANCE_BOT_PROMPT}]
+    contents: List[Dict[str, object]] = []
     for entry in trimmed_history:
         text = entry.text.strip()
         if not text:
             continue
-        role = "assistant" if entry.sender == "bot" else "user"
-        chat_messages.append({"role": role, "content": text})
-    chat_messages.append({"role": "user", "content": prompt})
+        role = "model" if entry.sender == "bot" else "user"
+        contents.append({"role": role, "parts": [{"text": text}]})
+    contents.append({"role": "user", "parts": [{"text": prompt}]})
+
+    body = {
+        "contents": contents,
+        "system_instruction": {"parts": [{"text": FINANCE_BOT_PROMPT}]},
+        "generationConfig": {"temperature": 0.3},
+    }
+
+    endpoint = f"{FINANCE_BOT_URL}/{FINANCE_BOT_MODEL}:generateContent"
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
-                FINANCE_BOT_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": FINANCE_BOT_MODEL,
-                    "temperature": 0.3,
-                    "messages": chat_messages,
-                },
+                endpoint,
+                params={"key": GEMINI_API_KEY},
+                headers={"Content-Type": "application/json"},
+                json=body,
             )
-    except httpx.RequestError as exc:
+    except httpx.RequestError as exc:  # pragma: no cover - network defensive
         raise HTTPException(status_code=502, detail="Finance Bot request failed.") from exc
 
     if response.status_code >= 400:
@@ -997,12 +1007,14 @@ async def finance_bot(payload: FinanceBotRequest):
     except json.JSONDecodeError as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=502, detail="Finance Bot returned invalid data.") from exc
 
-    reply = (
-        payload_json.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-        .strip()
-    )
+    reply = ""
+    for candidate in payload_json.get("candidates", []):
+        parts = candidate.get("content", {}).get("parts", [])
+        texts = [part.get("text", "").strip() for part in parts if part.get("text")]
+        if texts:
+            reply = " ".join(texts).strip()
+            break
+
     if not reply:
         reply = "Finance Bot is unsure how to help with that right now."
     return {"reply": reply}
