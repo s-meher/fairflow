@@ -23,9 +23,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import httpx
+import requests
 from fastapi import FastAPI, HTTPException, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from requests_oauthlib import OAuth1
 
 from . import database
 
@@ -36,6 +38,10 @@ GROK_MODEL = os.getenv("GROK_MODEL", "grok-4-mini")
 GROK_BASE_URL = os.getenv("GROK_BASE_URL", "https://api.x.ai")
 NESSIE_API_KEY = os.getenv("NESSIE_API_KEY")
 X_API_KEY = os.getenv("X_API_KEY")
+X_CONSUMER_KEY = os.getenv("X_CONSUMER_KEY")
+X_CONSUMER_SECRET = os.getenv("X_CONSUMER_SECRET")
+X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 GEMINI_API_KEY = (
     os.getenv("GEMINI_API_KEY")
     or os.getenv("GOOGLE_API_KEY")
@@ -216,6 +222,48 @@ def _get_x_tweets(handle: str, limit: int) -> List[Dict]:
         )
     _x_tweet_cache[cache_key] = (tweets, datetime.utcnow())
     return tweets
+
+
+def _can_post_to_x() -> bool:
+    return all([X_CONSUMER_KEY, X_CONSUMER_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
+
+
+def _share_loan_on_x(user_id: str, amount: float, lenders: List[Dict]) -> Tuple[Optional[str], Optional[str]]:
+    if not _can_post_to_x():
+        logger.info("X posting disabled; missing OAuth credentials.")
+        return None, "disabled"
+    if amount <= 0:
+        return None, "invalid_amount"
+    suffix = user_id.split("_")[-1][:4]
+    lender_count = len(lenders)
+    text = (
+        f"Symbio update: Princeton is saving together 💚\n"
+        f"A neighbor just borrowed ${amount:,.0f} for educational expenses "
+        f"from {lender_count} local supporter(s). #BorrowLocal #Symbio"
+    )
+    auth = OAuth1(
+        X_CONSUMER_KEY,
+        X_CONSUMER_SECRET,
+        X_ACCESS_TOKEN,
+        X_ACCESS_TOKEN_SECRET,
+    )
+    try:
+        resp = requests.post(
+            "https://api.x.com/2/tweets",
+            json={"text": text},
+            auth=auth,
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        body = getattr(getattr(exc, "response", None), "text", "")
+        logger.warning("X share failed for %s: %s | body=%s", user_id, exc, (body or "")[:200])
+        return None, "post_failed"
+    data = resp.json().get("data", {})
+    tweet_id = data.get("id")
+    if tweet_id:
+        logger.info("Shared loan update to X tweet_id=%s user=%s", tweet_id, user_id)
+    return tweet_id, None
 
 
 @lru_cache(maxsize=8)
@@ -1015,12 +1063,15 @@ def create_loan_request(payload: LoanRequest):
         ),
     )
     advice = "Great fit—community lenders ready." if risk["recommendation"] == "yes" else "Matched with cautious lenders."
+    tweet_id, tweet_error = _share_loan_on_x(payload.user_id, amount, lender_parts)
     return {
         "match_id": match_id,
         "total_amount": amount,
         "lenders": lender_parts,
         "risk_score": risk["score"],
         "ai_advice": advice,
+        "x_post_id": tweet_id,
+        "x_post_error": tweet_error,
     }
 
 

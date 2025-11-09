@@ -6,7 +6,7 @@ import { getSessionValue, setSessionValue } from '../session';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Waves, Users, Check, ArrowRight, Zap } from 'lucide-react';
+import { Waves, Users, Check, ArrowRight, Zap, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function BorrowOptions() {
@@ -257,6 +257,25 @@ export default function BorrowOptions() {
                           <span className="font-mono">${l.amount}</span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="mb-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Sparkles className="h-5 w-5" />
+                      <p className="font-semibold">Shared with @raymo8980</p>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {match.x_post_id
+                        ? 'Your approval story was posted to our shared X account so the community can cheer you on.'
+                        : match.x_post_error === 'disabled'
+                          ? 'X posting is disabled in this environment, but your loan is still confirmed.'
+                          : 'We could not post to X this time, but your loan is confirmed.'}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={() => navigate('/feed')}>
+                        View community feed
+                      </Button>
                     </div>
                   </div>
 
